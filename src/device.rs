@@ -40,8 +40,6 @@ impl PINS {
 }
 
 pub fn set_pin(pin: PINS, high: bool) -> Result<(), rppal::gpio::Error> {
-    println!("{} is the value", pin.value());
-
     let gpio = Gpio::new()?;
     let mut output_pin = gpio.get(pin.value()).expect("Pin not found!").into_output();
 

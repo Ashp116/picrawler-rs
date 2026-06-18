@@ -52,7 +52,6 @@ pub fn set_pin(pin: pins, high: bool) -> Result<(), rppal::gpio::Error> {
         output_pin.set_low();
     }
 
-    thread::sleep(Duration::from_millis(1));
     Ok(())
 }
 

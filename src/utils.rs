@@ -1,4 +1,4 @@
-use std::{error::Error, thread, time::Duration};
+use std::{sync::{Arc, Mutex}};
 
 use rppal::i2c::I2c;
 
@@ -52,7 +52,7 @@ pub mod adc {
 pub struct  Pwm {
     channel: u8,
     freq: u32,
-    device: I2c,
+    bus: Arc<Mutex<I2c>>,
 
     max_period: u16,
 }
@@ -67,7 +67,7 @@ impl Pwm {
     const CPU_CLOCK_HZ: f32 = 72_000_000.0;
 
     fn _i2c_write(&self, reg: u8, value: u16) {
-        self.device.smbus_write_word(reg, value.swap_bytes()).unwrap();
+        self.bus.lock().unwrap().smbus_write_word(reg, value.swap_bytes()).unwrap();
     }
 
     pub fn get_freq(&self) -> u32 {
@@ -78,18 +78,15 @@ impl Pwm {
         self.max_period
     }
     
-    pub fn new(channel: u8, max_period: u16, addr: Option<u16>) -> Result<Self, String> {
+    pub fn new(bus: Arc<Mutex<I2c>>, channel: u8, max_period: u16, addr: Option<u16>) -> Result<Self, String> {
          if channel > 11 {
             return Err(format!("Channel {} is out of range (0-11)", channel));
         }
-
-        let mut i2c = I2c::with_bus(1).unwrap();
-        i2c.set_slave_address(addr.unwrap_or(0x14)).unwrap();
         
         let mut pwm = Pwm {
             channel: channel,
             freq: 0,
-            device: i2c,
+            bus: bus,
             max_period: max_period,
         };
 
@@ -97,18 +94,28 @@ impl Pwm {
 
         Ok(pwm)
     }
-
+    
     pub fn set_freq(&mut self, hz: u16) {
         let prescaler = (Self::CPU_CLOCK_HZ / (self.max_period as f32 + 1.0) / hz as f32 - 1.0) as u16;
-        
-        self._i2c_write(Self::REG_PER1, self.max_period);
-        self._i2c_write(Self::REG_PSC1, prescaler);
-        
+        println!("[set_freq] channel: {} hz: {} prescaler: {} period: {}", 
+            self.channel, hz, prescaler, self.max_period);
+
+        if self.channel < 4 {
+            println!("[set_freq] writing timer 0 regs 0x{:02X} 0x{:02X}", Self::REG_PER1, Self::REG_PSC1);
+            self._i2c_write(Self::REG_PER1, self.max_period);
+            self._i2c_write(Self::REG_PSC1, prescaler);
+        } else {
+            println!("[set_freq] writing timer 1 regs 0x{:02X} 0x{:02X}", Self::REG_PER2, Self::REG_PSC2);
+            self._i2c_write(Self::REG_PER2, self.max_period);
+            self._i2c_write(Self::REG_PSC2, prescaler);
+        }
+
         self.freq = hz as u32;
     }
 
     pub fn pulse_width(&mut self, pulse_width: u16) {
         let reg: u8 = Self::REG_CHN + self.channel;
+        println!("[pulse_width] channel: {} reg: 0x{:02X} value: {}", self.channel, reg, pulse_width);
         self._i2c_write(reg, pulse_width);
     }
 }

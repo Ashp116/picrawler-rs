@@ -2,7 +2,7 @@ use std::{env, sync::{Arc, Mutex}, thread, time::Duration};
 
 use rppal::i2c::I2c;
 
-use crate::{actuators::Servo, robot::Robot};
+use crate::{robot::Robot};
 
 mod device;
 mod utils;
@@ -33,8 +33,9 @@ fn main() {
         i2c
     }));
 
-    let robot = Robot::from_yaml(config_path.to_string()).unwrap();
-    println!("{}", robot.name)
+    let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
+    println!("{}", robot.name);
+    robot.set_servo_angle(-45);
     // create all 12 first
     // let mut servo0 = Servo::new(Arc::clone(&I2c_bus), 0, None, None).unwrap();
     // let mut servo1 = Servo::new(Arc::clone(&I2c_bus), 1, None, None).unwrap();

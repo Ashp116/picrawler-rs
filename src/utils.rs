@@ -49,6 +49,7 @@ pub mod adc {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct  Pwm {
     channel: u8,
     freq: u32,

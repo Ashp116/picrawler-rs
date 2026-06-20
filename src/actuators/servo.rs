@@ -1,9 +1,10 @@
-use std::{error::Error, sync::{Arc, Mutex}};
+use std::{sync::{Arc, Mutex}};
 
 use rppal::i2c::I2c;
 
 use crate::utils::{Pwm, map_range};
 
+#[derive(Debug, Clone)]
 pub struct Servo {
     pwm: Pwm,
     max_pw: u32,

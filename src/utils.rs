@@ -59,10 +59,9 @@ pub struct  Pwm {
 
 impl Pwm {
     const REG_CHN: u8 = 0x20;
-    const REG_PSC1: u8 = 0x40;
-    const REG_PER1: u8 = 0x44;
-    const REG_PSC2: u8 = 0x50;
-    const REG_PER2: u8 = 0x54;
+    
+    const TIMER_PSC: [u8; 3] = [0x40, 0x41, 0x42];
+    const TIMER_PER: [u8; 3] = [0x44, 0x45, 0x46];
 
     const CPU_CLOCK_HZ: f32 = 72_000_000.0;
 
@@ -78,7 +77,7 @@ impl Pwm {
         self.max_period
     }
     
-    pub fn new(bus: Arc<Mutex<I2c>>, channel: u8, max_period: u16, addr: Option<u16>) -> Result<Self, String> {
+    pub fn new(bus: Arc<Mutex<I2c>>, channel: u8, max_period: u16) -> Result<Self, String> {
          if channel > 11 {
             return Err(format!("Channel {} is out of range (0-11)", channel));
         }
@@ -97,25 +96,16 @@ impl Pwm {
     
     pub fn set_freq(&mut self, hz: u16) {
         let prescaler = (Self::CPU_CLOCK_HZ / (self.max_period as f32 + 1.0) / hz as f32 - 1.0) as u16;
-        println!("[set_freq] channel: {} hz: {} prescaler: {} period: {}", 
-            self.channel, hz, prescaler, self.max_period);
+        
+        let timer = (self.channel / 4) as usize;
 
-        if self.channel < 4 {
-            println!("[set_freq] writing timer 0 regs 0x{:02X} 0x{:02X}", Self::REG_PER1, Self::REG_PSC1);
-            self._i2c_write(Self::REG_PER1, self.max_period);
-            self._i2c_write(Self::REG_PSC1, prescaler);
-        } else {
-            println!("[set_freq] writing timer 1 regs 0x{:02X} 0x{:02X}", Self::REG_PER2, Self::REG_PSC2);
-            self._i2c_write(Self::REG_PER2, self.max_period);
-            self._i2c_write(Self::REG_PSC2, prescaler);
-        }
-
+        self._i2c_write(Self::TIMER_PSC[timer], prescaler);
+        self._i2c_write(Self::TIMER_PER[timer], self.max_period);
         self.freq = hz as u32;
     }
 
     pub fn pulse_width(&mut self, pulse_width: u16) {
         let reg: u8 = Self::REG_CHN + self.channel;
-        println!("[pulse_width] channel: {} reg: 0x{:02X} value: {}", self.channel, reg, pulse_width);
         self._i2c_write(reg, pulse_width);
     }
 }

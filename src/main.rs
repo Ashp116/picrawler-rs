@@ -2,11 +2,11 @@ use std::{sync::{Arc, Mutex}, thread, time::Duration};
 
 use rppal::i2c::I2c;
 
-use crate::servo::Servo;
+use crate::actuators::Servo;
 
 mod device;
 mod utils;
-mod servo;
+mod actuators;
 
 fn main() {
     println!("Hello, world, I am picrawler!");

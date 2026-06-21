@@ -36,8 +36,8 @@ impl Servo {
         self.max_pw = max_pw;
     }
     
-    pub fn set_angle(&mut self, mut angle: i16) {
-        angle = angle.clamp(-90, 90);
+    pub fn set_angle(&mut self, mut angle: f32) {
+        angle = angle.clamp(-90.0, 90.0);
 
         let pwm_width_time = map_range(angle as f32, -90f32, 90f32, self.min_pw as f32, self.max_pw as f32);
         self.set_pluse_width_time(pwm_width_time);

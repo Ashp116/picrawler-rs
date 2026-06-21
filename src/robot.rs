@@ -89,12 +89,12 @@ impl Robot {
     }
 
 
-    pub fn set_servo_angle(&mut self, angle: i16) {
+    pub fn set_servo_angle(&mut self, angle: f32) {
         self.legs.iter_mut().for_each(|leg| {
             leg.joints.iter_mut().for_each(|joint| {
-                joint.servo.set_angle(angle);
-                thread::sleep(Duration::from_millis(10));
+                joint.servo.set_angle(angle.clamp(joint.min_deg, joint.max_deg));
             });
+            thread::sleep(Duration::from_millis(70));
         });
     }
     

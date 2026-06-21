@@ -14,7 +14,7 @@ fn main() {
     println!("Hello, world, I am picrawler!");
     device::reset_mcu();
     println!("Reset MCU done!");
-    thread::sleep(Duration::from_secs(1));
+    // thread::sleep(Duration::from_sdecs(1));
 
     let args: Vec<String> = env::args().collect();
     
@@ -24,18 +24,53 @@ fn main() {
         .map(|s| s.as_str())
         .unwrap_or("robot.yaml");
 
-    //println!("{}v Battery voltage", device::get_battery_voltage().unwrap());
-    thread::sleep(Duration::from_secs(1));
+    
+    // thread::sleep(Duration::from_secsd(1));
 
-    let I2c_bus = Arc::new(Mutex::new({
-        let mut i2c = I2c::with_bus(1).unwrap();
-        i2c.set_slave_address(0x14).unwrap();
-        i2c
-    }));
+    // let I2c_bus = Arc::new(Mutex::new({
+    //     let mut i2c = I2c::with_bus(1).unwrap();
+    //     i2c.set_slave_address(0x14).unwrap();
+    //     i2c
+    // }));
 
     let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
     println!("{}", robot.name);
-    robot.set_servo_angle(-45);
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(-45.0);
+    
+    thread::sleep(Duration::from_millis(200));
+    robot.set_servo_angle(45.0);
+    
+
     // create all 12 first
     // let mut servo0 = Servo::new(Arc::clone(&I2c_bus), 0, None, None).unwrap();
     // let mut servo1 = Servo::new(Arc::clone(&I2c_bus), 1, None, None).unwrap();

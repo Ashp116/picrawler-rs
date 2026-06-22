@@ -4,7 +4,6 @@ use serde::Deserialize;
 pub struct RobotConfig {
     pub name: String,
     pub hardware: HardwareConfig,
-    pub zero_servos_on_start: bool,
 
     pub legs: Vec<LegConfig>,
 }
@@ -13,6 +12,7 @@ pub struct RobotConfig {
 pub struct HardwareConfig {
     pub i2c: I2cConfig,
     pub pwm: PwmConfig,
+    pub servos: ServoConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,7 +31,7 @@ pub struct PwmConfig {
 pub struct LegConfig {
     pub id: String,
     pub mount_offset_mm: [f32; 3],
-    pub joints: Vec<JointConfig>,  // was HashMap<String, JointConfig>
+    pub joints: Vec<JointConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,4 +41,16 @@ pub struct JointConfig {
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServoConfig {
+    pub zero_on_start: ZeroOnStart,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ZeroOnStart {
+    pub enable: bool,
+    #[serde(default)]
+    pub delay: u64,
 }

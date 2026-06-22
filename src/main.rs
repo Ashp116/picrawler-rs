@@ -35,40 +35,40 @@ fn main() {
 
     let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
     println!("{}", robot.name);
-    robot.set_servo_angle(-45.0);
-    
-    thread::sleep(Duration::from_millis(200));
     robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(-45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(-45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(-45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(-45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(-45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(-45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(-45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(-45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(-45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
-    thread::sleep(Duration::from_millis(200));
-    robot.set_servo_angle(45.0);
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(-45.0);
+    
+    // thread::sleep(Duration::from_millis(200));
+    // robot.set_servo_angle(45.0);
     
 
     // create all 12 first

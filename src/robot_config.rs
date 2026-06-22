@@ -4,8 +4,9 @@ use serde::Deserialize;
 pub struct RobotConfig {
     pub name: String,
     pub hardware: HardwareConfig,
+    pub zero_servos_on_start: bool,
 
-    pub legs: Vec<LegConfig>
+    pub legs: Vec<LegConfig>,
 }
 
 #[derive(Debug, Deserialize)]

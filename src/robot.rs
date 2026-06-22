@@ -10,7 +10,7 @@ pub struct Leg {
 }
 
 impl Leg {
-    pub fn from_config(config: &LegConfig, i2c_bus: Arc<Mutex<I2c>>) -> Result<Self, String> {
+    pub fn from_config(config: &LegConfig, i2c_bus: Arc<Mutex<I2c>>, zero_servos: bool) -> Result<Self, String> {
         let coxa = config.joints.iter().find(|j| j.name == "coxa")
             .ok_or_else(|| format!("leg {}: missing coxa joint", config.id))?;
         let femur = config.joints.iter().find(|j| j.name == "femur")
@@ -21,9 +21,9 @@ impl Leg {
         Ok(Leg {
             id: config.id.clone(),
             joints: [
-                Joint::from_config(coxa, Arc::clone(&i2c_bus)),
-                Joint::from_config(femur, Arc::clone(&i2c_bus)),
-                Joint::from_config(tibia, Arc::clone(&i2c_bus)),
+                Joint::from_config(coxa, Arc::clone(&i2c_bus), zero_servos),
+                Joint::from_config(femur, Arc::clone(&i2c_bus), zero_servos),
+                Joint::from_config(tibia, Arc::clone(&i2c_bus), zero_servos),
             ],
         })
     }
@@ -42,7 +42,16 @@ pub struct Joint {
 }
 
 impl Joint {
-    pub fn from_config(config: &JointConfig, i2c_bus: Arc<Mutex<I2c>>) -> Self {
+    pub fn from_config(config: &JointConfig, i2c_bus: Arc<Mutex<I2c>>, zero_servos: bool) -> Self {
+        let mut servo = Servo::new(Arc::clone(&i2c_bus), config.channel,0.0,None, None).unwrap();
+
+        println!("{}",zero_servos);
+
+        if zero_servos {
+            servo.hard_set_angle(0.0);
+            thread::sleep(Duration::from_millis(250));
+        }
+
         Joint {
             name: config.name.clone(),
             channel: config.channel,
@@ -50,8 +59,7 @@ impl Joint {
             calibration_deg: config.calibration_deg,
             min_deg: config.min_deg,
             max_deg: config.max_deg,
-
-            servo: Servo::new(Arc::clone(&i2c_bus), config.channel, None, None).unwrap(),
+            servo,
         }
     }
 }
@@ -71,7 +79,7 @@ impl Robot {
         let i2c = Arc::new(Mutex::new(i2c));
 
         let legs: Result<Vec<Leg>, String> = config.legs.iter()
-            .map(|l| Leg::from_config(l, Arc::clone(&i2c)))
+            .map(|l| Leg::from_config(l, Arc::clone(&i2c), config.zero_servos_on_start))
             .collect();
 
         Ok(Robot {
@@ -90,12 +98,16 @@ impl Robot {
 
 
     pub fn set_servo_angle(&mut self, angle: f32) {
-        self.legs.iter_mut().for_each(|leg| {
-            leg.joints.iter_mut().for_each(|joint| {
-                joint.servo.set_angle(angle.clamp(joint.min_deg, joint.max_deg));
-            });
-            thread::sleep(Duration::from_millis(70));
-        });
+        thread::scope(|s| {
+        for leg in self.legs.iter_mut() {
+            for joint in leg.joints.iter_mut() {
+                let clamped = angle.clamp(joint.min_deg, joint.max_deg);
+                s.spawn(move || {
+                    joint.servo.set_angle(clamped);
+                });
+            }
+        }
+    });
     }
     
 }

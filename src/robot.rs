@@ -44,12 +44,10 @@ pub struct Joint {
 impl Joint {
     pub fn from_config(config: &JointConfig, i2c_bus: Arc<Mutex<I2c>>, zero_servos: bool) -> Self {
         let mut servo = Servo::new(Arc::clone(&i2c_bus), config.channel,0.0,None, None).unwrap();
-
-        println!("{}",zero_servos);
-
+        
         if zero_servos {
             servo.hard_set_angle(0.0);
-            thread::sleep(Duration::from_millis(250));
+            thread::sleep(Duration::from_millis(100));
         }
 
         Joint {

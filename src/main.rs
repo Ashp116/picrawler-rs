@@ -39,7 +39,7 @@ fn main() {
     let mut mul = 1.0;
 
     for i in 0..100 {
-        robot.set_servo_angle(45.0 * mul);
+        robot.set_servo_angle(90.0 * mul);
         thread::sleep(Duration::from_millis(200));
         mul = mul * -1.0;
     }

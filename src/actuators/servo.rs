@@ -19,8 +19,8 @@ impl Servo {
     const MAX_PREIOD: u16 = 4095;
 
     fn _step_angle(&mut self, target_angle: f32, speed: Option<f32>) {
-        let speed = speed.unwrap_or(70.0).clamp(0.0, 100.0);
-        let step_time_ms: u64 = 5;
+        let speed = speed.unwrap_or(100.0).clamp(0.0, 100.0);
+        let step_time_ms: u64 = 10;
 
         let total_time = -9.9 * speed + 1000.0;
         let delta = target_angle - self.current_angle;

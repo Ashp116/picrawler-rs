@@ -103,10 +103,12 @@ impl Robot {
         thread::scope(|s| {
         for leg in self.legs.iter_mut() {
             for joint in leg.joints.iter_mut() {
-                let clamped = angle.clamp(joint.min_deg, joint.max_deg);
-                s.spawn(move || {
-                    joint.servo.set_angle(clamped);
-                });
+                if joint.channel == 1 || joint.channel == 4 || joint.channel == 7 || joint.channel == 10 {
+                    let clamped = angle.clamp(joint.min_deg, joint.max_deg);
+                    s.spawn(move || {
+                        joint.servo.set_angle(clamped);
+                    });
+                }
             }
         }
     });

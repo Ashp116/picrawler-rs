@@ -1,6 +1,5 @@
-use std::{env, sync::{Arc, Mutex}, thread, time::Duration};
+use std::{env, thread, time::Duration};
 
-use rppal::i2c::I2c;
 
 use crate::{robot::Robot};
 
@@ -38,7 +37,7 @@ fn main() {
     println!("{}", robot.name);
     let mut mul = 1.0;
 
-    for i in 0..100 {
+    for _i in 0..100 {
         robot.set_servo_angle(90.0 * mul);
         thread::sleep(Duration::from_millis(200));
         mul = mul * -1.0;

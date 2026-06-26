@@ -1,4 +1,4 @@
-use std::{cmp::{max, min}, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
+use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 
 use rppal::i2c::I2c;
 
@@ -65,7 +65,7 @@ impl Servo {
     }
 
     pub fn new(bus: Arc<Mutex<I2c>>, pin: u8, init_angle: f32, max_period: Option<u16>, freq: Option<u16>) -> Result<Self, String> {
-        let mut pwm = Pwm::new(bus, pin as u8, max_period.unwrap_or(Self::MAX_PREIOD)).unwrap();
+        let pwm = Pwm::new(bus, pin as u8, max_period.unwrap_or(Self::MAX_PREIOD)).unwrap();
         
         if freq != None {
             //pwm.set_freq(freq.unwrap_or(Self::DEFAULT_FREQ));

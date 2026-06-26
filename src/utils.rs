@@ -37,7 +37,7 @@ pub mod adc {
         let mut buf = [0u8; 2];
         i2c.read(&mut buf).unwrap();
 
-        let value = ((buf[0] as u16) << 8 | (buf[1] as u16));
+        let value = (buf[0] as u16) << 8 | (buf[1] as u16) ;
         Ok(value)
     }
 

@@ -4,8 +4,10 @@ use std::{env, thread, time::Duration};
 use crate::{robot::Robot};
 
 mod device;
+mod _utils;
 mod utils;
 mod actuators;
+mod actuator_group;
 mod robot;
 mod robot_config;
 

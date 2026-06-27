@@ -2,7 +2,7 @@ use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 
 use rppal::i2c::I2c;
 
-use crate::utils::{Pwm, map_range};
+use crate::_utils::{Pwm, map_range};
 
 #[derive(Debug, Clone)]
 pub struct Servo {
@@ -10,6 +10,8 @@ pub struct Servo {
     max_pw: u32,
     min_pw: u32,
     current_angle: f32,
+    
+    pub channel: u8,
 }
 
 impl Servo {
@@ -76,6 +78,7 @@ impl Servo {
             max_pw: Self::MAX_PW, 
             min_pw: Self::MIN_PW,
             current_angle: init_angle,
+            channel: pin,
         })
     }
 

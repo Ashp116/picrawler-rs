@@ -2,7 +2,7 @@ use std::{fmt::Error, thread};
 use std::time::Duration;
 use rppal::gpio::{Gpio};
 
-use crate::utils::adc;
+use crate::_utils::adc;
 
 #[derive(Copy, Clone, PartialEq, Debug, Eq)]
 pub enum Pins {

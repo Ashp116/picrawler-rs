@@ -47,7 +47,6 @@ impl Joint {
 
         if robot_config.hardware.servos.zero_on_start.enable {
             servo.hard_set_angle(0.0);
-            thread::sleep(Duration::from_millis(50));
         }
 
         Joint {

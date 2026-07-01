@@ -2,7 +2,7 @@ use std::{fs, sync::{Arc, Mutex}, thread, time::Duration};
 
 use rppal::i2c::I2c;
 
-use crate::{actuators::Servo, robot_config::{JointConfig, LegConfig, RobotConfig}};
+use crate::{actuator_group::{ServoGroup, servo_group}, actuators::Servo, robot_config::{JointConfig, LegConfig, RobotConfig}};
 
 pub struct Leg {
     pub id: String,
@@ -10,7 +10,7 @@ pub struct Leg {
 }
 
 impl Leg {
-    pub fn from_config(config: &LegConfig, i2c_bus: Arc<Mutex<I2c>>, robot_config: &RobotConfig) -> Result<Self, String> {
+    pub fn from_config(config: &LegConfig) -> Result<Self, String> {
         let coxa = config.joints.iter().find(|j| j.name == "coxa")
             .ok_or_else(|| format!("leg {}: missing coxa joint", config.id))?;
         let femur = config.joints.iter().find(|j| j.name == "femur")
@@ -21,9 +21,9 @@ impl Leg {
         Ok(Leg {
             id: config.id.clone(),
             joints: [
-                Joint::from_config(coxa, Arc::clone(&i2c_bus), robot_config),
-                Joint::from_config(femur, Arc::clone(&i2c_bus), robot_config),
-                Joint::from_config(tibia, Arc::clone(&i2c_bus), robot_config),
+                Joint::from_config(coxa),
+                Joint::from_config(femur),
+                Joint::from_config(tibia),
             ],
         })
     }
@@ -37,17 +37,10 @@ pub struct Joint {
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
-
-    pub servo: Servo,
 }
 
 impl Joint {
-    pub fn from_config(config: &JointConfig, i2c_bus: Arc<Mutex<I2c>>, robot_config: &RobotConfig) -> Self {
-        let mut servo = Servo::new(Arc::clone(&i2c_bus), config.channel,0.0,None, None).unwrap();
-
-        if robot_config.hardware.servos.zero_on_start.enable {
-            servo.hard_set_angle(0.0);
-        }
+    pub fn from_config(config: &JointConfig) -> Self {
 
         Joint {
             name: config.name.clone(),
@@ -56,7 +49,6 @@ impl Joint {
             calibration_deg: config.calibration_deg,
             min_deg: config.min_deg,
             max_deg: config.max_deg,
-            servo,
         }
     }
 }
@@ -66,7 +58,9 @@ pub struct Robot {
     pub i2c_bus: Arc<Mutex<I2c>>,
     pub legs: Vec<Leg>,
 
-    pub config: RobotConfig
+    pub config: RobotConfig,
+
+    servo_group: ServoGroup,    
 }
 
 impl Robot {
@@ -78,16 +72,41 @@ impl Robot {
         let i2c = Arc::new(Mutex::new(i2c));
 
         let legs: Result<Vec<Leg>, String> = config.legs.iter()
-            .map(|l| Leg::from_config(l, Arc::clone(&i2c), &config))
+            .map(|l| Leg::from_config(l))
             .collect();
 
+        let mut legs = legs.unwrap();
+
         thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
+
+        
+        // Servo Group
+        let total_joints: usize = config.legs.iter()
+            .map(|l| l.joints.len())
+            .sum();
+
+        println!("{} joints", total_joints);
+        
+        let mut servo_group = ServoGroup::new(total_joints);
+        
+        for leg in legs.iter_mut() {
+            for joint in leg.joints.iter_mut() {
+                let mut servo = Servo::new(Arc::clone(&i2c), joint.channel,0.0,None, None).unwrap();
+
+                if config.hardware.servos.zero_on_start.enable {
+                    servo.hard_set_angle(0.0);
+                }
+
+                servo_group.append(servo, Some(false));
+            }
+        }
 
         Ok(Robot {
             name: config.name.clone(),
             i2c_bus: i2c,
-            legs: legs.unwrap(),
+            legs: legs,
             config,
+            servo_group,
         })
     }
 
@@ -99,18 +118,9 @@ impl Robot {
     }
 
     pub fn set_servo_angle(&mut self, angle: f32) {
-        thread::scope(|s| {
-        for leg in self.legs.iter_mut() {
-            for joint in leg.joints.iter_mut() {
-                if joint.channel == 1 || joint.channel == 4 || joint.channel == 7 || joint.channel == 10 {
-                    let clamped = angle.clamp(joint.min_deg, joint.max_deg);
-                    s.spawn(move || {
-                        joint.servo.set_angle(clamped);
-                    });
-                }
-            }
+        for i in 0..12 {
+            self.servo_group.set_target(i, angle);
         }
-    });
     }
     
 }

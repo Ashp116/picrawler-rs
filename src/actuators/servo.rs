@@ -6,7 +6,7 @@ use crate::_utils::{Pwm, map_range};
 
 #[derive(Debug, Clone)]
 pub struct Servo {
-    pwm: Pwm,
+    pwm: Option<Pwm>,
     max_pw: u32,
     min_pw: u32,
     current_angle: f32,
@@ -74,12 +74,22 @@ impl Servo {
         }
         
         Ok(Servo { 
-            pwm, 
+            pwm: Some(pwm), 
             max_pw: Self::MAX_PW, 
             min_pw: Self::MIN_PW,
             current_angle: init_angle,
             channel: pin,
         })
+    }
+
+    pub fn default() -> Self {
+        Servo {
+            pwm: None,
+            max_pw: 2500,
+            min_pw: 500,
+            current_angle: 0.0,
+            channel: 0,
+        }
     }
 
     pub fn set_min_max_pw(&mut self, min_pw: u32, max_pw: u32) {
@@ -107,10 +117,12 @@ impl Servo {
     pub fn set_pulse_width_time(&mut self, mut pluse_width_time: f32) {
         pluse_width_time = pluse_width_time.clamp(self.min_pw as f32, self.max_pw as f32);
         
-        let period_us = 1_000_000.0 / self.pwm.get_freq() as f32;
-        let pwr = pluse_width_time / period_us;
-        let pulse_width = (pwr * self.pwm.get_period() as f32) as u16;
+        let pwm = self.pwm.as_mut().unwrap();
 
-        self.pwm.pulse_width(pulse_width);
+        let period_us = 1_000_000.0 / pwm.get_freq() as f32;
+        let pwr = pluse_width_time / period_us;
+        let pulse_width = (pwr * pwm.get_period() as f32) as u16;
+
+        pwm.pulse_width(pulse_width);
     }
 } 

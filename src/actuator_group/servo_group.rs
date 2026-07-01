@@ -1,9 +1,9 @@
-use std::{num, sync::{Arc, Barrier, atomic::{Ordering, AtomicBool}}, thread};
+use std::{collections::HashMap, num, sync::{Arc, Barrier, atomic::{AtomicBool, Ordering}}, thread};
 
 use crate::{actuators::Servo, utils::AtomicF32::AtomicF32};
 
 pub struct ServoGroup {
-    targets: Vec<Arc<AtomicF32>>,
+    targets: HashMap<u8, Arc<AtomicF32>>,
     estop: Arc<AtomicBool>,
 
     num_servos: usize,
@@ -11,9 +11,9 @@ pub struct ServoGroup {
 }
 
 impl ServoGroup {
-    pub fn new(num_servos: u8) -> Self {
+    pub fn new(num_servos: usize) -> Self {
         return ServoGroup { 
-            targets: Vec::with_capacity(num_servos as usize), 
+            targets: HashMap::new(), 
             estop: Arc::new(AtomicBool::new(false)),
             num_servos: num_servos as usize,
             heartbeat: Arc::new(Barrier::new((num_servos + 1) as usize))
@@ -30,7 +30,7 @@ impl ServoGroup {
         let target_clone = Arc::clone(&target);
         let heartbeat = Arc::clone(&self.heartbeat);
 
-        self.targets.push(target);
+        self.targets.insert(servo.channel, target);
 
         thread::spawn(move || {
             loop {
@@ -39,13 +39,13 @@ impl ServoGroup {
 
                 let target_angle = target_clone.load();
                 servo.set_angle(target_angle);
-
+                println!("{} servo, {} angle", servo.channel, target_angle);
             }
         });
     }
 
-    pub fn set_target(&mut self, channel: usize, target_angle: f32) {
-        self.targets[channel].store(target_angle);
+    pub fn set_target(&mut self, channel: u8, target_angle: f32) {
+        self.targets[&channel].store(target_angle);
     }
 
     pub fn estop(&self) {

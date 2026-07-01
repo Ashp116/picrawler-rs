@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
 
-use crate::{robot::Robot};
+use crate::{actuator_group::ServoGroup, actuators::{Servo, servo}, robot::Robot};
 
 mod device;
 mod _utils;
@@ -39,11 +39,30 @@ fn main() {
     println!("{}", robot.name);
     let mut mul = 1.0;
 
-    for _i in 0..100 {
-        robot.set_servo_angle(90.0 * mul);
-        thread::sleep(Duration::from_millis(200));
-        mul = mul * -1.0;
+    let mut servo_group = ServoGroup::new(1);
+
+    servo_group.append(Servo::new(robot.i2c_bus, 0, 0.0,None, None).unwrap(), Some(false));
+    servo_group.tick();
+    let mut mul = -1.0 as f32;
+    let mut c = 0;
+
+
+    loop {
+        servo_group.set_target(0, 45.0 * mul);
+        servo_group.tick();
+        mul *= -1.0 as f32;
+        if c == 16 {
+            servo_group.estop();
+        }
+
+        c += 1;
+        println!("{}", c);
     }
+    // for _i in 0..100 {
+    //     robot.set_servo_angle(90.0 * mul);
+    //     thread::sleep(Duration::from_millis(200));
+    //     mul = mul * -1.0;
+    // }
     
 
     // create all 12 first

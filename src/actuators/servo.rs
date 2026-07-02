@@ -1,128 +1,105 @@
-use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
-
+use std::sync::{Arc, Mutex};
 use rppal::i2c::I2c;
-
-use crate::_utils::{Pwm, map_range};
+use crate::_utils::map_range;
 
 #[derive(Debug, Clone)]
 pub struct Servo {
-    pwm: Option<Pwm>,
-    max_pw: u32,
-    min_pw: u32,
-    current_angle: f32,
-    
     pub channel: u8,
+    pub max_pw: f32,
+    pub min_pw: f32,
+    pub current_angle: f32,
+    pub min_deg: f32,
+    pub max_deg: f32,
+    pub calibration_deg: f32,
+    step: f32,
+    target: f32,
+    steps_remaining: u32,
 }
 
 impl Servo {
-    const MAX_PW: u32 = 2500;
-    const MIN_PW: u32 = 500;
-    const DEFAULT_FREQ: u16 = 50;
-    const MAX_PREIOD: u16 = 4095;
+    const MAX_PW: f32 = 2500.0;
+    const MIN_PW: f32 = 500.0;
+    const MAX_DPS: f32 = 428.0;
+    const STEP_TIME_MS: f32 = 10.0;
 
-    fn _step_angle(&mut self, target_angle: f32, speed: Option<f32>) {
-        let speed = speed.unwrap_or(100.0).clamp(0.0, 100.0);
-        let step_time_ms: u64 = 10;
-
-        let total_time = -9.9 * speed + 1000.0;
-        let delta = target_angle - self.current_angle;
-
-        if delta.abs() < 0.01 {
-            return;
-        }
-
-        let max_dps = 428.0; 
-        let current_dps = delta.abs() / total_time * 1000.0;
-        let total_time = if current_dps > max_dps {
-            delta.abs() / max_dps * 1000.0
-        } else {
-            total_time
-        };
-
-        let max_step = (total_time / step_time_ms as f32) as u32;
-        let max_step = max_step.max(1);
-        let step = delta / max_step as f32; 
-
-        for _ in 0..max_step {
-            let tick_start = Instant::now();
-
-            self.current_angle += step;
-            let pwm_width_time = map_range(
-                self.current_angle,
-                -90.0, 90.0,
-                self.min_pw as f32, self.max_pw as f32
-            );
-            self.set_pulse_width_time(pwm_width_time);
-
-            let elapsed = tick_start.elapsed();
-            let step_dur = Duration::from_millis(step_time_ms);
-            if elapsed < step_dur {
-                thread::sleep(step_dur - elapsed);
-            }
-        }
-
-        self.current_angle = target_angle;
-        let final_pw = map_range(target_angle, -90.0, 90.0, self.min_pw as f32, self.max_pw as f32);
-        self.set_pulse_width_time(final_pw);
-    }
-
-    pub fn new(bus: Arc<Mutex<I2c>>, pin: u8, init_angle: f32, max_period: Option<u16>, freq: Option<u16>) -> Result<Self, String> {
-        let pwm = Pwm::new(bus, pin as u8, max_period.unwrap_or(Self::MAX_PREIOD)).unwrap();
-        
-        if freq != None {
-            //pwm.set_freq(freq.unwrap_or(Self::DEFAULT_FREQ));
-        }
-        
-        Ok(Servo { 
-            pwm: Some(pwm), 
-            max_pw: Self::MAX_PW, 
+    pub fn new(channel: u8, init_angle: f32, min_deg: f32, max_deg: f32, calibration_deg: f32) -> Self {
+        Servo {
+            channel,
+            max_pw: Self::MAX_PW,
             min_pw: Self::MIN_PW,
             current_angle: init_angle,
-            channel: pin,
-        })
-    }
-
-    pub fn default() -> Self {
-        Servo {
-            pwm: None,
-            max_pw: 2500,
-            min_pw: 500,
-            current_angle: 0.0,
-            channel: 0,
+            min_deg,
+            max_deg,
+            calibration_deg,
+            step: 0.0,
+            target: init_angle,
+            steps_remaining: 0,
         }
     }
 
-    pub fn set_min_max_pw(&mut self, min_pw: u32, max_pw: u32) {
-        self.min_pw = min_pw;
-        self.max_pw = max_pw;
+    pub fn angle_to_pw(&self, angle: f32) -> u16 {
+        let angle = angle.clamp(self.min_deg, self.max_deg);
+        let pw_time = map_range(angle + self.calibration_deg, -90.0, 90.0, self.min_pw, self.max_pw);
+        let period_us = 1_000_000.0 / 50.0;
+        ((pw_time / period_us) * 4095.0) as u16
     }
 
     pub fn soft_set_angle(&mut self, angle: f32) {
-        self.current_angle = angle
+        self.current_angle = angle.clamp(self.min_deg, self.max_deg);
+        self.target = self.current_angle;
+        self.step = 0.0;
+        self.steps_remaining = 0;
     }
 
-    pub fn hard_set_angle(&mut self, mut angle: f32) {
-        angle = angle.clamp(-90.0, 90.0);
-
-        let final_pw = map_range(angle, -90.0, 90.0, self.min_pw as f32, self.max_pw as f32);
-        self.set_pulse_width_time(final_pw);
-    }
-    
-    pub fn set_angle(&mut self, mut angle: f32) {
-        angle = angle.clamp(-90.0, 90.0);
-
-        self._step_angle(angle, None);
+    pub fn hard_set_angle(&mut self, angle: f32, bus: &Arc<Mutex<I2c>>) {
+        let pw = self.angle_to_pw(angle);
+        let reg = 0x20u8 + self.channel;
+        let _ = bus.lock().unwrap().smbus_write_word(reg, pw.swap_bytes());
+        self.soft_set_angle(angle);
     }
 
-    pub fn set_pulse_width_time(&mut self, mut pluse_width_time: f32) {
-        pluse_width_time = pluse_width_time.clamp(self.min_pw as f32, self.max_pw as f32);
-        
-        let pwm = self.pwm.as_mut().unwrap();
+    pub fn set_target(&mut self, target: f32, speed: f32) {
+        let target = target.clamp(self.min_deg, self.max_deg);
+        let delta = target - self.current_angle;
 
-        let period_us = 1_000_000.0 / pwm.get_freq() as f32;
-        let pwr = pluse_width_time / period_us;
-        let pulse_width = (pwr * pwm.get_period() as f32) as u16;
+        if delta.abs() < 0.01 {
+            self.steps_remaining = 0;
+            self.target = target;
+            return;
+        }
 
-        pwm.pulse_width(pulse_width);
+        let speed = speed.clamp(0.0, 100.0);
+        let mut total_time = -9.9 * speed + 1000.0;
+        let current_dps = delta.abs() / total_time * 1000.0;
+        if current_dps > Self::MAX_DPS {
+            total_time = delta.abs() / Self::MAX_DPS * 1000.0;
+        }
+
+        let max_step = ((total_time / Self::STEP_TIME_MS) as u32).max(1);
+        self.step = delta / max_step as f32;
+        self.target = target;
+        self.steps_remaining = max_step;
     }
-} 
+
+    pub fn tick(&mut self) -> (f32, u16, bool) {
+        if self.steps_remaining == 0 {
+            return (self.current_angle, self.angle_to_pw(self.current_angle), true);
+        }
+
+        self.current_angle += self.step;
+        self.steps_remaining -= 1;
+
+        if self.steps_remaining == 0 {
+            self.current_angle = self.target;
+        }
+
+        let pw = self.angle_to_pw(self.current_angle);
+        (self.current_angle, pw, self.steps_remaining == 0)
+    }
+}
+
+impl Default for Servo {
+    fn default() -> Self {
+        Servo::new(0, 0.0, -90.0, 90.0, 0.0)
+    }
+}

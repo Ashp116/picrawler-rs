@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
 
-use crate::{actuator_group::ServoGroup, actuators::{Servo, servo}, robot::Robot};
+use crate::{actuator_group::ServoGroup, actuators::{Servo, servo}, device::reset_mcu, robot::Robot};
 
 mod device;
 mod _utils;
@@ -34,19 +34,22 @@ fn main() {
     //     i2c
     // }));
 
+    reset_mcu();
+
     let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
     thread::sleep(Duration::from_millis(300));
     println!("{}", robot.name);
     let mut mul = 1.0;
-    let mut mul = -1.0 as f32;
-    let mut c = 0;
-    
-    for _i in 0..100 {
-        robot.set_servo_angle(90.0 * mul);
-        thread::sleep(Duration::from_millis(200));
-        mul = mul * -1.0;
+
+    // call ONCE to set target
+    robot.set_servo_angle(90.0);
+
+    // call every frame to advance toward it
+    loop {
+        robot.tick();
+        thread::sleep(Duration::from_millis(10));
     }
-    
+        
 
     // create all 12 first
     // let mut servo0 = Servo::new(Arc::clone(&I2c_bus), 0, None, None).unwrap();

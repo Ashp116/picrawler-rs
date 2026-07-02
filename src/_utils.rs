@@ -67,7 +67,17 @@ impl Pwm {
     const CPU_CLOCK_HZ: f32 = 72_000_000.0;
 
     fn _i2c_write(&self, reg: u8, value: u16) {
-        self.bus.lock().unwrap().smbus_write_word(reg, value.swap_bytes()).unwrap();
+        let bus = match self.bus.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Mutex poisoned, recovering");
+                poisoned.into_inner() // recover the lock despite poison
+            }
+        };
+        
+        if let Err(e) = bus.smbus_write_word(reg, value.swap_bytes()) {
+            eprintln!("I2C write failed: {}", e);
+        }
     }
 
     pub fn get_freq(&self) -> u32 {

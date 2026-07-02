@@ -2,7 +2,7 @@ use std::{fs, sync::{Arc, Mutex}, thread, time::Duration};
 
 use rppal::i2c::I2c;
 
-use crate::{actuator_group::{ServoGroup, servo_group}, actuators::Servo, robot_config::{JointConfig, LegConfig, RobotConfig}};
+use crate::{actuator_group::ServoGroup, actuators::Servo, robot_config::{LegConfig, JointConfig, RobotConfig}};
 
 pub struct Leg {
     pub id: String,
@@ -33,7 +33,7 @@ impl Leg {
 pub struct Joint {
     pub name: String,
     pub channel: u8,
-    pub angle: f32,           
+    pub angle: f32,
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
@@ -41,7 +41,6 @@ pub struct Joint {
 
 impl Joint {
     pub fn from_config(config: &JointConfig) -> Self {
-
         Joint {
             name: config.name.clone(),
             channel: config.channel,
@@ -57,10 +56,8 @@ pub struct Robot {
     pub name: String,
     pub i2c_bus: Arc<Mutex<I2c>>,
     pub legs: Vec<Leg>,
-
     pub config: RobotConfig,
-
-    servo_group: ServoGroup,    
+    servo_group: ServoGroup,
 }
 
 impl Robot {
@@ -71,57 +68,58 @@ impl Robot {
 
         let i2c = Arc::new(Mutex::new(i2c));
 
-        let legs: Result<Vec<Leg>, String> = config.legs.iter()
+        let legs: Vec<Leg> = config.legs.iter()
             .map(|l| Leg::from_config(l))
-            .collect();
+            .collect::<Result<Vec<Leg>, String>>()?;
 
-        let mut legs = legs.unwrap();
+        let mut servo_group = ServoGroup::new(Arc::clone(&i2c));
 
-        thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
-
-        
-        // Servo Group
-        let total_joints: usize = config.legs.iter()
-            .map(|l| l.joints.len())
-            .sum();
-
-        println!("{} joints", total_joints);
-        
-        let mut servo_group = ServoGroup::new(total_joints);
-        
-        for leg in legs.iter_mut() {
-            for joint in leg.joints.iter_mut() {
-                let mut servo = Servo::new(Arc::clone(&i2c), joint.channel,0.0,None, None).unwrap();
+        for leg in legs.iter() {
+            for joint in leg.joints.iter() {
+                let mut servo = Servo::new(
+                    joint.channel,
+                    0.0,
+                    joint.min_deg,
+                    joint.max_deg,
+                    joint.calibration_deg,
+                );
 
                 if config.hardware.servos.zero_on_start.enable {
-                    servo.hard_set_angle(0.0);
+                    servo.hard_set_angle(0.0, &i2c);
                 }
 
                 servo_group.append(servo, Some(false));
             }
         }
+        
+        if config.hardware.servos.zero_on_start.enable {
+            thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
+        }
 
         Ok(Robot {
             name: config.name.clone(),
-            i2c_bus: i2c,
-            legs: legs,
+            i2c_bus: Arc::clone(&i2c),
+            legs,
             config,
             servo_group,
         })
     }
 
     pub fn from_yaml(robot_yaml: String) -> Result<Self, String> {
-        let content = fs::read_to_string(robot_yaml).map_err(|e| e.to_string()).unwrap();
-        let config = serde_yaml::from_str::<RobotConfig>(&content).map_err(|e| e.to_string()).unwrap();
-
+        let content = fs::read_to_string(robot_yaml).map_err(|e| e.to_string())?;
+        let config = serde_yaml::from_str::<RobotConfig>(&content).map_err(|e| e.to_string())?;
         Self::from_config(config)
     }
 
     pub fn set_servo_angle(&mut self, angle: f32) {
-        for i in 0..12 {
-            self.servo_group.set_target(i, angle);
+        for leg in self.legs.iter() {
+            for joint in leg.joints.iter() {
+                self.servo_group.set_target(joint.channel, angle);
+            }
         }
     }
-    
-}
 
+    pub fn tick(&mut self) {
+        self.servo_group.tick();
+    }
+}

@@ -25,10 +25,11 @@ hardware:
       delay: 300 # ms. Delay after zero-ing.
 
 
+# pivot-to-pivot lengths, per SunFounder's kinematics (C=33 coxa, A=48 hip->knee, B=78 knee->foot fin)
 geometry:
   coxa_length_mm: 33
-  femur_length_mm: 78
-  tibia_length_mm: 48
+  femur_length_mm: 48
+  tibia_length_mm: 78
 
 legs:
   - id: front_left

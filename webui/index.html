@@ -403,7 +403,7 @@ function startDemo() {
       name: "picrawler (demo)",
       battery_v: 7.6 + 0.25 * Math.sin(t / 8) + (Math.random() - 0.5) * 0.03,
       all_at_target: false,
-      geometry: { coxa_length_mm: 33, femur_length_mm: 78, tibia_length_mm: 48 },
+      geometry: { coxa_length_mm: 33, femur_length_mm: 48, tibia_length_mm: 78 },
       legs: legIds.map((id, li) => ({
         id, mount_offset_mm: offsets[li],
         joints: ["coxa", "femur", "tibia"].map((name, ji) => {
@@ -701,11 +701,14 @@ function setSegment(mesh, a, b) {
   mesh.scale.set(1, len, 1);
 }
 
-/* FK matching the PiCrawler's zero pose:
-     coxa 0°  -> first segment points 45° diagonally outward, horizontal
-     femur 0° -> second segment points straight up
-     tibia 0° -> third segment lies flat horizontal (it rides on the femur)
-   Positive femur tips the knee outward, positive tibia folds the foot down,
+/* FK matching the PiCrawler's zero pose (verified against SunFounder's
+   coord2polar/polar2coord: femur = short 48mm riser hip->knee, tibia = long
+   78mm foot fin knee->tip):
+     coxa 0°  -> coxa arm points 45° diagonally outward, horizontal
+     femur 0° -> riser points straight up (elevation = 90° - femur)
+     tibia 0° -> fin extends horizontally outward (pitch below horizontal
+                 = femur + tibia, i.e. the fin rides on the femur)
+   Positive femur tips the knee outward, positive tibia folds the fin down,
    positive coxa sweeps the leg toward the front of the body. */
 function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
   const rad = (d) => (d * Math.PI) / 180;
@@ -737,7 +740,7 @@ function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
 }
 
 function renderRobot(snap) {
-  const geom = snap.geometry || { coxa_length_mm: 33, femur_length_mm: 78, tibia_length_mm: 48 };
+  const geom = snap.geometry || { coxa_length_mm: 33, femur_length_mm: 48, tibia_length_mm: 78 };
 
   // first pass in the robot frame, so the body can settle onto the lowest foot
   const chains = [];
@@ -756,7 +759,8 @@ function renderRobot(snap) {
     chains.push({ leg, pts, ghost, atTarget: coxa.at_target && femur.at_target && tibia.at_target });
   }
 
-  const settledH = Math.max(30, -minZ + 2);
+  // feet above hip level -> nothing to stand on, so the chassis (36mm tall) rests on the ground
+  const settledH = Math.max(20, -minZ + 2);
   bodyH += (settledH - bodyH) * 0.15;
   body.position.y = bodyH;
   nose.position.y = bodyH;

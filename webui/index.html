@@ -890,9 +890,13 @@ const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35
    GEOM_AXIS is FIXED: the legs / body always render in this frame, so tweaking
    the config never spins the robot. axisMap is the user-editable, persisted
    mapping that only drives the axis gizmos + the front-indicator nose. */
+<<<<<<< HEAD
 const GEOM_AXIS = { x: { src: "x", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "y", sign: -1 } };
 // identity: the world-axis corner gizmo shows clean three.js X/Y/Z (no remap)
 const WORLD_AXIS = { x: { src: "x", sign: 1 }, y: { src: "y", sign: 1 }, z: { src: "z", sign: 1 } };
+=======
+const GEOM_AXIS = { x: { src: "y", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "x", sign: 1 } };
+>>>>>>> 746b2e898b08311d3d81515f7e5cede0683eee0a
 const AXIS_DEFAULT = structuredClone(GEOM_AXIS);
 const axisMap = loadAxisMap();
 function loadAxisMap() {

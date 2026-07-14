@@ -163,6 +163,58 @@
     pointer-events: none;
   }
 
+  /* ---------------- kinematics calibration panel ---------------- */
+  #kin-panel {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: 232px;
+    max-width: 60vw;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+  }
+  #kin-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  #kin-head .chev { transition: transform 0.15s; }
+  #kin-panel.collapsed #kin-head .chev { transform: rotate(-90deg); }
+  #kin-panel.collapsed #kin-body { display: none; }
+  #kin-body { padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 9px; }
+  .kin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kin-row > label { color: var(--text-secondary); flex-shrink: 0; }
+  .kin-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .kin-seg button {
+    border: none; border-radius: 0; padding: 3px 8px; font-size: 11px;
+    background: transparent; color: var(--text-secondary);
+  }
+  .kin-seg button.on { background: var(--series-1); color: #fff; }
+  .kin-sub { font-size: 10.5px; color: var(--text-muted); margin-top: -3px; }
+  .kin-slider { display: flex; align-items: center; gap: 8px; }
+  .kin-slider label { width: 42px; color: var(--text-secondary); }
+  .kin-slider input[type=range] { flex: 1; min-width: 0; accent-color: var(--series-1); }
+  .kin-slider .val {
+    width: 34px; text-align: right; color: var(--text-primary);
+    font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums;
+  }
+  #kin-manual-wrap.off { opacity: 0.4; pointer-events: none; }
+  .kin-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .kin-check input { accent-color: var(--series-1); }
+
   /* ---------------- side panel ---------------- */
   #panel {
     width: 400px;
@@ -258,6 +310,40 @@
       <div class="hud-chip"><small>telemetry</small><b id="hud-rate">—</b><span id="hud-rate-sub">no packets</span></div>
     </div>
     <div id="orbit-hint">drag orbit · scroll zoom · right-drag pan</div>
+
+    <div id="kin-panel">
+      <div id="kin-head"><span>Kinematics calibration</span><span class="chev">▾</span></div>
+      <div id="kin-body">
+        <div class="kin-row">
+          <label>Femur sign</label>
+          <span class="kin-seg" id="kin-femur-sign">
+            <button data-v="1">+</button><button data-v="-1">−</button>
+          </span>
+        </div>
+        <div class="kin-row">
+          <label>Fin sign</label>
+          <span class="kin-seg" id="kin-tibia-sign">
+            <button data-v="1">+</button><button data-v="-1">−</button>
+          </span>
+        </div>
+        <div>
+          <div class="kin-row"><label>Fin coupling</label></div>
+          <span class="kin-seg" id="kin-tibia-mode" style="margin-top:5px;width:100%">
+            <button data-v="independent" style="flex:1">indep</button>
+            <button data-v="add" style="flex:1">+femur</button>
+            <button data-v="sub" style="flex:1">−femur</button>
+          </span>
+          <div class="kin-sub" id="kin-mode-sub"></div>
+        </div>
+
+        <label class="kin-check"><input type="checkbox" id="kin-manual"> Manual pose (override telemetry)</label>
+        <div id="kin-manual-wrap" class="off">
+          <div class="kin-slider"><label>coxa</label><input type="range" id="kin-coxa" min="0" max="90" step="1"><span class="val" id="kin-coxa-v">0</span></div>
+          <div class="kin-slider"><label>femur</label><input type="range" id="kin-femur" min="0" max="90" step="1"><span class="val" id="kin-femur-v">0</span></div>
+          <div class="kin-slider"><label>tibia</label><input type="range" id="kin-tibia" min="0" max="90" step="1"><span class="val" id="kin-tibia-v">0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="panel">
@@ -554,6 +640,70 @@ function logEvents(snap) {
   }
 }
 
+/* ================= kinematics calibration ================= */
+/* The femur/tibia sign + fin coupling depend on how the servos are physically
+   mounted, which is easiest to dial in live against the real robot. These
+   settings persist and feed legChainRobot(); coxa is the settled pinwheel. */
+let lastSnap = null;   // most recent snapshot, so panel tweaks can re-render it
+const kin = Object.assign(
+  { femurSign: 1, tibiaSign: 1, tibiaMode: "independent",
+    manual: false, coxa: 0, femur: 0, tibia: 0 },
+  JSON.parse(localStorage.getItem("pc-kin") || "{}"));
+
+function saveKin() { localStorage.setItem("pc-kin", JSON.stringify(kin)); }
+
+const modeSub = {
+  independent: "fin pitch = tibia only",
+  add: "fin pitch = femur + tibia",
+  sub: "fin pitch = femur − tibia",
+};
+
+function paintSeg(id, value) {
+  for (const b of document.querySelectorAll(`#${id} button`)) {
+    b.classList.toggle("on", b.dataset.v === String(value));
+  }
+}
+function wireSeg(id, key, after) {
+  document.getElementById(id).addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    let v = b.dataset.v;
+    if (v === "1" || v === "-1") v = Number(v);
+    kin[key] = v; saveKin(); paintSeg(id, v); after && after();
+  });
+  paintSeg(id, kin[key]);
+}
+wireSeg("kin-femur-sign", "femurSign");
+wireSeg("kin-tibia-sign", "tibiaSign");
+wireSeg("kin-tibia-mode", "tibiaMode",
+  () => (document.getElementById("kin-mode-sub").textContent = modeSub[kin.tibiaMode]));
+document.getElementById("kin-mode-sub").textContent = modeSub[kin.tibiaMode];
+
+const kinPanel = document.getElementById("kin-panel");
+if (localStorage.getItem("pc-kin-collapsed") === "1") kinPanel.classList.add("collapsed");
+document.getElementById("kin-head").addEventListener("click", () => {
+  kinPanel.classList.toggle("collapsed");
+  localStorage.setItem("pc-kin-collapsed", kinPanel.classList.contains("collapsed") ? "1" : "0");
+});
+
+const manualWrap = document.getElementById("kin-manual-wrap");
+const manualChk = document.getElementById("kin-manual");
+manualChk.checked = kin.manual;
+manualWrap.classList.toggle("off", !kin.manual);
+manualChk.addEventListener("change", () => {
+  kin.manual = manualChk.checked; saveKin();
+  manualWrap.classList.toggle("off", !kin.manual);
+  if (kin.manual && lastSnap) handleSnapshot(lastSnap);
+});
+for (const j of ["coxa", "femur", "tibia"]) {
+  const s = document.getElementById("kin-" + j);
+  const v = document.getElementById("kin-" + j + "-v");
+  s.value = kin[j]; v.textContent = kin[j];
+  s.addEventListener("input", () => {
+    kin[j] = Number(s.value); v.textContent = s.value; saveKin();
+    if (kin.manual && lastSnap) handleSnapshot(lastSnap);
+  });
+}
+
 /* ================= 3D scene ================= */
 const canvas = document.getElementById("viewport");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -717,14 +867,20 @@ function setSegment(mesh, a, b) {
    the same world direction (a pinwheel), not a per-leg local sweep. Effective
    angles below are already direction-multiplied: positive coxa = uniform world
    yaw, positive femur tips the knee outward, positive tibia folds the fin down. */
-function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
+function legChainRobot(mount, geom, coxaDeg, femurRaw, tibiaRaw) {
   const rad = (d) => (d * Math.PI) / 180;
   const [mx, my] = mount;
   const dir = Math.atan2(my, mx) + rad(coxaDeg);
   const cd = Math.cos(dir), sd = Math.sin(dir);
 
+  // femur/tibia sign + fin coupling come from the live calibration panel
+  const femurDeg = femurRaw * kin.femurSign;
+  const tibiaDeg = tibiaRaw * kin.tibiaSign;
   const f = rad(femurDeg);   // femur angle from vertical (positions the knee)
-  const ft = rad(tibiaDeg);  // fin pitch below horizontal — absolute, NOT carried by the femur
+  let finDeg = tibiaDeg;                                   // independent
+  if (kin.tibiaMode === "add") finDeg = femurDeg + tibiaDeg;
+  else if (kin.tibiaMode === "sub") finDeg = femurDeg - tibiaDeg;
+  const ft = rad(finDeg);    // fin pitch below horizontal
 
   const hip = { x: mx, y: my, z: 0 };
   const coxaEnd = {
@@ -757,14 +913,16 @@ function renderRobot(snap) {
     const tibia = leg.joints.find((j) => j.name === "tibia");
     if (!coxa || !femur || !tibia) continue;
 
-    // fallback to the uniform pinwheel sign if telemetry predates `direction`
+    // coxa yaw sign comes from telemetry (uniform pinwheel fallback); femur/tibia
+    // sign + fin coupling come from the calibration panel inside legChainRobot.
     const dc = coxa.direction ?? -1;
-    const df = femur.direction ?? 1;
-    const dt = tibia.direction ?? 1;
-    const pts = legChainRobot(leg.mount_offset_mm, geom,
-      coxa.angle_deg * dc, femur.angle_deg * df, tibia.angle_deg * dt);
-    const ghost = legChainRobot(leg.mount_offset_mm, geom,
-      coxa.target_deg * dc, femur.target_deg * df, tibia.target_deg * dt);
+    // manual pose overrides telemetry angles for hands-on calibration
+    const cA = kin.manual ? kin.coxa  : coxa.angle_deg;
+    const fA = kin.manual ? kin.femur : femur.angle_deg;
+    const tA = kin.manual ? kin.tibia : tibia.angle_deg;
+    const pts = legChainRobot(leg.mount_offset_mm, geom, cA * dc, fA, tA);
+    const ghost = kin.manual ? pts : legChainRobot(leg.mount_offset_mm, geom,
+      coxa.target_deg * dc, femur.target_deg, tibia.target_deg);
     for (const p of pts) minZ = Math.min(minZ, p.z);
     chains.push({ leg, pts, ghost, atTarget: coxa.at_target && femur.at_target && tibia.at_target });
   }
@@ -811,6 +969,7 @@ renderer.setAnimationLoop(() => {
 /* ================= snapshot handler ================= */
 function handleSnapshot(snap) {
   if (!snap || snap.type !== "telemetry" || !Array.isArray(snap.legs)) return;
+  lastSnap = snap;
   if (snap.name) {
     document.getElementById("robot-name").innerHTML = `${snap.name} <span>telemetry</span>`;
   }
@@ -820,7 +979,27 @@ function handleSnapshot(snap) {
   renderRobot(snap);
 }
 
+/* a neutral zero-pose snapshot so the 3D viewer and manual calibration work
+   before any telemetry or demo has arrived */
+function neutralSnap() {
+  const ids = ["front_left", "front_right", "back_left", "back_right"];
+  const offs = [[60,60,0],[60,-60,0],[-60,60,0],[-60,-60,0]];
+  return {
+    type: "telemetry", name: "picrawler", battery_v: null, all_at_target: true,
+    geometry: { coxa_length_mm: 33, femur_length_mm: 48, tibia_length_mm: 78 },
+    legs: ids.map((id, i) => ({
+      id, mount_offset_mm: offs[i],
+      joints: ["coxa", "femur", "tibia"].map((name, j) => ({
+        name, channel: i * 3 + j, angle_deg: 0, target_deg: 0,
+        min_deg: 0, max_deg: 90, direction: name === "coxa" ? -1 : 1, at_target: true,
+      })),
+    })),
+  };
+}
+
+handleSnapshot(neutralSnap());
 log("dashboard ready — connect to the robot or start demo mode", "sys");
+if (kin.manual) log("manual pose active — sliders override telemetry", "sys");
 </script>
 </body>
 </html>

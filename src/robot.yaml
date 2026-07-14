@@ -1,5 +1,17 @@
 name: picrawler
 
+telemetry:
+  enable: true
+  rate_hz: 20 # snapshots per second pushed to each client
+  socket:
+    bind: 0.0.0.0
+    port: 8765 # websocket telemetry tunnel (ws://<host>:8765)
+  webui:
+    enable: true
+    bind: 0.0.0.0
+    port: 8080 # static dashboard host (http://<host>:8080)
+    root: webui
+
 hardware:
   i2c:
     bus: 1

@@ -85,6 +85,10 @@ impl ServoGroup {
         self.servos.get(&channel).map(|s| s.current_angle)
     }
 
+    pub fn get_target(&self, channel: u8) -> Option<f32> {
+        self.servos.get(&channel).map(|s| s.get_target())
+    }
+
     /// True once the servo on `channel` has reached its goal position; None if the channel is unknown.
     pub fn is_at_target(&self, channel: u8) -> Option<bool> {
         self.servos.get(&channel).map(|s| s.is_at_target())

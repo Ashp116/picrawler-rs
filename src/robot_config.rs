@@ -4,8 +4,76 @@ use serde::Deserialize;
 pub struct RobotConfig {
     pub name: String,
     pub hardware: HardwareConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub geometry: Option<GeometryConfig>,
 
     pub legs: Vec<LegConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TelemetryConfig {
+    pub enable: bool,
+    #[serde(default = "default_rate_hz")]
+    pub rate_hz: f32,
+    #[serde(default)]
+    pub socket: TelemetrySocketConfig,
+    #[serde(default)]
+    pub webui: WebUiConfig,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        TelemetryConfig {
+            enable: false,
+            rate_hz: default_rate_hz(),
+            socket: TelemetrySocketConfig::default(),
+            webui: WebUiConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TelemetrySocketConfig {
+    pub bind: String,
+    pub port: u16,
+}
+
+impl Default for TelemetrySocketConfig {
+    fn default() -> Self {
+        TelemetrySocketConfig { bind: "0.0.0.0".to_string(), port: 8765 }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebUiConfig {
+    pub enable: bool,
+    pub bind: String,
+    pub port: u16,
+    pub root: String,
+}
+
+impl Default for WebUiConfig {
+    fn default() -> Self {
+        WebUiConfig {
+            enable: false,
+            bind: "0.0.0.0".to_string(),
+            port: 8080,
+            root: "webui".to_string(),
+        }
+    }
+}
+
+fn default_rate_hz() -> f32 {
+    20.0
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+pub struct GeometryConfig {
+    pub coxa_length_mm: f32,
+    pub femur_length_mm: f32,
+    pub tibia_length_mm: f32,
 }
 
 #[derive(Debug, Deserialize)]

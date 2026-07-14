@@ -89,7 +89,7 @@ impl Robot {
         }
 
         if config.hardware.servos.zero_on_start.enable {
-            servo_group.flush();
+            servo_group.flush(0.0);
             thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
         }
 
@@ -116,7 +116,7 @@ impl Robot {
         }
     }
 
-    pub fn tick(&mut self) {
-        self.servo_group.tick();
+    pub fn tick(&mut self, dt_ms: f32) {
+        self.servo_group.tick(dt_ms);
     }
 }

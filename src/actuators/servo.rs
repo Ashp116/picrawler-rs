@@ -9,16 +9,14 @@ pub struct Servo {
     pub min_deg: f32,
     pub max_deg: f32,
     pub calibration_deg: f32,
-    step: f32,
+    velocity: f32,
     target: f32,
-    steps_remaining: u32,
 }
 
 impl Servo {
     const MAX_PW: f32 = 2500.0;
     const MIN_PW: f32 = 500.0;
     const MAX_DPS: f32 = 428.0;
-    const STEP_TIME_MS: f32 = 10.0;
 
     pub fn new(channel: u8, init_angle: f32, min_deg: f32, max_deg: f32, calibration_deg: f32) -> Self {
         Servo {
@@ -29,9 +27,8 @@ impl Servo {
             min_deg,
             max_deg,
             calibration_deg,
-            step: 0.0,
+            velocity: 0.0,
             target: init_angle,
-            steps_remaining: 0,
         }
     }
 
@@ -45,8 +42,7 @@ impl Servo {
     pub fn soft_set_angle(&mut self, angle: f32) {
         self.current_angle = angle.clamp(self.min_deg, self.max_deg);
         self.target = self.current_angle;
-        self.step = 0.0;
-        self.steps_remaining = 0;
+        self.velocity = 0.0;
     }
 
     pub fn set_target(&mut self, target: f32, speed: f32) {
@@ -54,38 +50,40 @@ impl Servo {
         let delta = target - self.current_angle;
 
         if delta.abs() < 0.01 {
-            self.steps_remaining = 0;
+            self.velocity = 0.0;
             self.target = target;
             return;
         }
 
         let speed = speed.clamp(0.0, 100.0);
-        let mut total_time = -9.9 * speed + 1000.0;
-        let current_dps = delta.abs() / total_time * 1000.0;
+        let mut total_time_ms = -9.9 * speed + 1000.0;
+        let current_dps = delta.abs() / total_time_ms * 1000.0;
         if current_dps > Self::MAX_DPS {
-            total_time = delta.abs() / Self::MAX_DPS * 1000.0;
+            total_time_ms = delta.abs() / Self::MAX_DPS * 1000.0;
         }
 
-        let max_step = ((total_time / Self::STEP_TIME_MS) as u32).max(1);
-        self.step = delta / max_step as f32;
         self.target = target;
-        self.steps_remaining = max_step;
+        self.velocity = delta / total_time_ms;
     }
 
-    pub fn tick(&mut self) -> (f32, u16, bool) {
-        if self.steps_remaining == 0 {
+    /// Advances the servo by `dt_ms` of real elapsed time. Returns (angle, pulse_width, done).
+    pub fn tick(&mut self, dt_ms: f32) -> (f32, u16, bool) {
+        if self.velocity == 0.0 {
             return (self.current_angle, self.angle_to_pw(self.current_angle), true);
         }
 
-        self.current_angle += self.step;
-        self.steps_remaining -= 1;
+        let next = self.current_angle + self.velocity * dt_ms;
+        let overshot = if self.velocity > 0.0 { next >= self.target } else { next <= self.target };
 
-        if self.steps_remaining == 0 {
+        if overshot {
             self.current_angle = self.target;
+            self.velocity = 0.0;
+        } else {
+            self.current_angle = next;
         }
 
         let pw = self.angle_to_pw(self.current_angle);
-        (self.current_angle, pw, self.steps_remaining == 0)
+        (self.current_angle, pw, self.velocity == 0.0)
     }
 }
 

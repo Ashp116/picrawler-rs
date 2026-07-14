@@ -1,4 +1,4 @@
-use std::{env, thread, time::Duration};
+use std::{env, thread, time::{Duration, Instant}};
 
 
 use crate::{actuator_group::ServoGroup, actuators::{Servo, servo}, device::reset_mcu, robot::Robot};
@@ -43,9 +43,14 @@ fn main() {
     // call ONCE to set target
     robot.set_servo_angle(90.0);
 
-    // call every frame to advance toward it
+    // call every frame to advance toward it, using the real elapsed time since the last tick
+    let mut last_tick = Instant::now();
     loop {
-        robot.tick();
+        let now = Instant::now();
+        let dt_ms = now.duration_since(last_tick).as_secs_f32() * 1000.0;
+        last_tick = now;
+
+        robot.tick(dt_ms);
         thread::sleep(Duration::from_millis(10));
     }
         

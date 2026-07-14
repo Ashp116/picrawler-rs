@@ -48,19 +48,19 @@ impl ServoGroup {
         }
     }
 
-    pub fn flush(&mut self) {
+    pub fn flush(&mut self, dt_ms: f32) {
         let bus = self.bus.lock().unwrap();
         for (channel, servo) in self.servos.iter_mut() {
-            let (_angle, pulse_width, _done) = servo.tick();
+            let (_angle, pulse_width, _done) = servo.tick(dt_ms);
             let _ = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes());
         }
     }
 
-    pub fn tick(&mut self) -> bool {
+    pub fn tick(&mut self, dt_ms: f32) -> bool {
         if self.estop.load(Ordering::Acquire) {
             return false;
         }
-        self.flush();
+        self.flush(dt_ms);
         true
     }
 

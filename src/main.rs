@@ -27,11 +27,14 @@ fn main() {
     println!("{}", robot.name);
 
     // set the target once; the tick loop below steps every servo toward it
-    robot.set_servo_angle(45.0);
+    let mut mul = 1.0;
+    robot.set_servo_angle(45.0 * mul);
 
     let mut last_tick = Instant::now();
     let mut last_vbat = Instant::now();
-    let mut reached = false;
+    // when the servos reach the target, dwell for 1s (without blocking the tick
+    // loop) and then swing to the opposite side
+    let mut dwell_until: Option<Instant> = None;
     loop {
         let now = Instant::now();
         let dt_ms = now.duration_since(last_tick).as_secs_f32() * 1000.0;
@@ -39,9 +42,19 @@ fn main() {
 
         robot.tick(dt_ms);
 
-        if !reached && robot.all_servos_at_target() {
-            reached = true;
-            println!("all servos reached target");
+        if robot.all_servos_at_target() {
+            match dwell_until {
+                None => {
+                    println!("all servos reached target ({})", 45.0 * mul);
+                    dwell_until = Some(Instant::now() + Duration::from_secs(1));
+                }
+                Some(t) if Instant::now() >= t => {
+                    mul *= -1.0;
+                    robot.set_servo_angle(45.0 * mul);
+                    dwell_until = None;
+                }
+                Some(_) => {}
+            }
         }
 
         if last_vbat.elapsed() >= Duration::from_secs(1) {

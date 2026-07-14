@@ -185,6 +185,44 @@
     color: var(--text-muted);
   }
   .panel-head .actions { display: flex; gap: 6px; }
+  .panel-head .reading {
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .panel-head .reading .status-good     { color: var(--good); }
+  .panel-head .reading .status-warning  { color: var(--warning); }
+  .panel-head .reading .status-serious  { color: var(--serious); }
+  .panel-head .reading .status-critical { color: var(--critical); }
+
+  #battery {
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #batt-chart { display: block; width: 100%; height: 96px; cursor: crosshair; }
+  #batt-chart .axis-label { fill: var(--text-muted); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+  #batt-chart .grid-line  { stroke: var(--grid); stroke-width: 1; }
+  #batt-chart .batt-area  { fill: var(--series-1-soft); }
+  #batt-chart .batt-line  { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  #batt-chart .cross      { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  #batt-chart .cross-dot  { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+  #batt-empty { color: var(--text-muted); font-size: 12px; padding: 24px 0; text-align: center; }
+  #batt-tip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 20;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+    padding: 5px 9px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    display: none;
+    white-space: nowrap;
+  }
+  #batt-tip b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
   #readout {
     padding: 0 12px 10px;
@@ -261,6 +299,15 @@
   </div>
 
   <div id="panel">
+    <div class="panel-head">
+      <span>Battery voltage</span>
+      <span class="reading" id="batt-reading">—</span>
+    </div>
+    <div id="battery">
+      <svg id="batt-chart" preserveAspectRatio="none"></svg>
+      <div id="batt-empty">waiting for a battery reading…</div>
+    </div>
+
     <div class="panel-head"><span>Joint readout</span></div>
     <div id="readout" class="mono">
       <table>
@@ -278,6 +325,8 @@
     <div id="log" class="mono"></div>
   </div>
 </div>
+
+<div id="batt-tip"></div>
 
 <script type="module">
 import * as THREE from "three";
@@ -462,6 +511,9 @@ function renderHud(snap) {
     const [cls, label] = battStatus(snap.battery_v);
     battEl.textContent = snap.battery_v.toFixed(2) + " V";
     battSub.innerHTML = `<span class="status-${cls}">● ${label}</span>`;
+    document.getElementById("batt-reading").innerHTML =
+      `<span class="status-${cls}">${snap.battery_v.toFixed(2)} V</span>`;
+    pushBattery(snap.battery_v);
     if (lastBattLogged === null || Math.abs(snap.battery_v - lastBattLogged) >= 0.05) {
       lastBattLogged = snap.battery_v;
       log(`battery ${snap.battery_v.toFixed(2)} V (${label})`,
@@ -470,6 +522,7 @@ function renderHud(snap) {
   } else {
     battEl.textContent = "—";
     battSub.textContent = "no reading";
+    document.getElementById("batt-reading").textContent = "—";
   }
 
   const joints = snap.legs.flatMap((l) => l.joints);
@@ -485,6 +538,129 @@ setInterval(() => {
   const age = (Date.now() - lastMsgAt) / 1000;
   sub.textContent = age < 1.5 ? "streaming" : `stale ${age.toFixed(0)}s`;
 }, 500);
+
+/* ================= battery chart ================= */
+const battHistory = [];             // { t: ms, v: volts }
+const BATT_MAX_POINTS = 1200;       // ~5 min of history at 250 ms spacing
+let lastBattPush = 0;
+let battPlot = null;                // last drawn geometry, for hover hit-testing
+const battChart = document.getElementById("batt-chart");
+const battTip = document.getElementById("batt-tip");
+const battEmpty = document.getElementById("batt-empty");
+
+function pushBattery(v) {
+  const now = Date.now();
+  if (now - lastBattPush < 250) return;   // downsample to keep the line light
+  lastBattPush = now;
+  battHistory.push({ t: now, v });
+  if (battHistory.length > BATT_MAX_POINTS) battHistory.shift();
+  renderBattChart();
+}
+
+// pick ~count round-number voltage ticks spanning [min, max]
+function niceTicks(min, max, count) {
+  const raw = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out = [];
+  for (let t = Math.ceil(min / step) * step; t <= max + 1e-9; t += step) out.push(t);
+  return out;
+}
+
+function renderBattChart() {
+  if (battHistory.length < 2) {
+    battEmpty.style.display = "";
+    battChart.style.display = "none";
+    return;
+  }
+  battEmpty.style.display = "none";
+  battChart.style.display = "";
+
+  const w = battChart.clientWidth || 360;
+  const h = battChart.clientHeight || 96;
+  const padL = 34, padR = 8, padT = 8, padB = 16;
+  const iw = w - padL - padR, ih = h - padT - padB;
+
+  const vs = battHistory.map((d) => d.v);
+  let vmin = Math.min(...vs), vmax = Math.max(...vs);
+  const span = Math.max(vmax - vmin, 0.2);
+  vmin -= span * 0.15; vmax += span * 0.15;
+  const range = vmax - vmin;
+
+  const t0 = battHistory[0].t, t1 = battHistory[battHistory.length - 1].t;
+  const tspan = Math.max(t1 - t0, 1);
+  const X = (t) => padL + ((t - t0) / tspan) * iw;
+  const Y = (v) => padT + (1 - (v - vmin) / range) * ih;
+
+  const pts = battHistory.map((d) => ({ x: X(d.t), y: Y(d.v), t: d.t, v: d.v }));
+  battPlot = { pts, w, h, baseY: h - padB };
+
+  let grid = "";
+  for (const tv of niceTicks(vmin, vmax, 3)) {
+    const y = Y(tv).toFixed(1);
+    grid += `<line class="grid-line" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}"/>`
+         +  `<text class="axis-label" x="${padL - 5}" y="${y}" text-anchor="end" dominant-baseline="middle">${tv.toFixed(1)}</text>`;
+  }
+
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("");
+  const area = `M${pts[0].x.toFixed(1)},${battPlot.baseY.toFixed(1)}`
+             + pts.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("")
+             + `L${pts[pts.length - 1].x.toFixed(1)},${battPlot.baseY.toFixed(1)}Z`;
+
+  const dur = Math.round((t1 - t0) / 1000);
+  const durLabel = dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s ago` : `${dur}s ago`;
+
+  battChart.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  battChart.innerHTML =
+    grid +
+    `<path class="batt-area" d="${area}"/>` +
+    `<path class="batt-line" d="${line}"/>` +
+    `<text class="axis-label" x="${padL}" y="${h - 4}">${durLabel}</text>` +
+    `<text class="axis-label" x="${w - padR}" y="${h - 4}" text-anchor="end">now</text>`;
+}
+
+function drawBattCross(p) {
+  removeBattCross();
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.id = "batt-cross-g";
+  g.innerHTML =
+    `<line class="cross" x1="${p.x.toFixed(1)}" y1="6" x2="${p.x.toFixed(1)}" y2="${battPlot.baseY.toFixed(1)}"/>`
+  + `<circle class="cross-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5"/>`;
+  battChart.appendChild(g);
+}
+function removeBattCross() {
+  const g = document.getElementById("batt-cross-g");
+  if (g) g.remove();
+}
+
+battChart.addEventListener("mousemove", (e) => {
+  if (!battPlot) return;
+  const rect = battChart.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (battPlot.w / rect.width);
+  let best = battPlot.pts[0], bd = Infinity;
+  for (const p of battPlot.pts) {
+    const d = Math.abs(p.x - mx);
+    if (d < bd) { bd = d; best = p; }
+  }
+  drawBattCross(best);
+
+  const age = Math.round((Date.now() - best.t) / 1000);
+  battTip.innerHTML = `<b>${best.v.toFixed(2)} V</b> · ${age <= 0 ? "now" : age + "s ago"}`;
+  battTip.style.display = "block";
+  const tw = battTip.offsetWidth, th = battTip.offsetHeight;
+  let tx = e.clientX + 12, ty = e.clientY - th - 8;
+  if (tx + tw > innerWidth - 6) tx = e.clientX - tw - 12;
+  if (ty < 6) ty = e.clientY + 16;
+  battTip.style.left = tx + "px";
+  battTip.style.top = ty + "px";
+});
+battChart.addEventListener("mouseleave", () => {
+  battTip.style.display = "none";
+  removeBattCross();
+});
+
+new ResizeObserver(() => renderBattChart()).observe(battChart);
 
 const readoutBody = document.getElementById("readout-body");
 const readoutRows = new Map(); // legId -> {cells: {coxa,femur,tibia}}

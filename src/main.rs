@@ -5,7 +5,6 @@ use crate::{actuator_group::ServoGroup, actuators::{Servo, servo}, device::reset
 
 mod device;
 mod _utils;
-mod utils;
 mod actuators;
 mod actuator_group;
 mod robot;

@@ -76,7 +76,7 @@ impl Robot {
 
         for leg in legs.iter() {
             for joint in leg.joints.iter() {
-                let mut servo = Servo::new(
+                let servo = Servo::new(
                     joint.channel,
                     0.0,
                     joint.min_deg,
@@ -84,15 +84,12 @@ impl Robot {
                     joint.calibration_deg,
                 );
 
-                if config.hardware.servos.zero_on_start.enable {
-                    servo.hard_set_angle(0.0, &i2c);
-                }
-
                 servo_group.append(servo, Some(false));
             }
         }
-        
+
         if config.hardware.servos.zero_on_start.enable {
+            servo_group.flush();
             thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
         }
 

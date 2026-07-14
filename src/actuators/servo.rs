@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-use rppal::i2c::I2c;
 use crate::_utils::map_range;
 
 #[derive(Debug, Clone)]
@@ -49,13 +47,6 @@ impl Servo {
         self.target = self.current_angle;
         self.step = 0.0;
         self.steps_remaining = 0;
-    }
-
-    pub fn hard_set_angle(&mut self, angle: f32, bus: &Arc<Mutex<I2c>>) {
-        let pw = self.angle_to_pw(angle);
-        let reg = 0x20u8 + self.channel;
-        let _ = bus.lock().unwrap().smbus_write_word(reg, pw.swap_bytes());
-        self.soft_set_angle(angle);
     }
 
     pub fn set_target(&mut self, target: f32, speed: f32) {

@@ -911,12 +911,12 @@ function mapAxisToThree(map, r) {
     map.y.src === r ? map.y.sign : 0,
     map.z.src === r ? map.z.sign : 0);
 }
-// gizmo axes follow the configurable mapping
-function axisDefs() {
+// axis arrow defs for a given mapping
+function axisDefs(map) {
   return [
-    { dir: mapAxisToThree(axisMap, "x"), color: 0xe5533d, label: "X" }, // robot forward
-    { dir: mapAxisToThree(axisMap, "y"), color: 0x35b56a, label: "Y" }, // robot left
-    { dir: mapAxisToThree(axisMap, "z"), color: 0x3987e5, label: "Z" }, // robot up
+    { dir: mapAxisToThree(map, "x"), color: 0xe5533d, label: "X" }, // robot forward
+    { dir: mapAxisToThree(map, "y"), color: 0x35b56a, label: "Y" }, // robot left
+    { dir: mapAxisToThree(map, "z"), color: 0x3987e5, label: "Z" }, // robot up
   ];
 }
 
@@ -938,10 +938,10 @@ function makeAxisLetter(text, color, scale) {
   return sprite;
 }
 
-function makeAxisGizmo(len, letterScale) {
+function makeAxisGizmo(len, letterScale, map) {
   const g = new THREE.Group();
   const head = len * 0.28, headW = len * 0.16;
-  for (const a of axisDefs()) {
+  for (const a of axisDefs(map)) {
     if (a.dir.lengthSq() === 0) continue; // skip a slot with no axis assigned
     g.add(new THREE.ArrowHelper(a.dir, new THREE.Vector3(), len, a.color, head, headW));
     const s = makeAxisLetter(a.label, a.color, letterScale);
@@ -970,14 +970,15 @@ function applyBodyOverlay(g) {
 
 let lastSnap = null; // most recent snapshot, so config changes can re-render it
 
-// triad sitting on the robot body
-let bodyAxes = makeAxisGizmo(62, 15);
+// ROBOT axis: triad on the body, follows the configurable mapping
+let bodyAxes = makeAxisGizmo(62, 15, axisMap);
 applyBodyOverlay(bodyAxes);
 scene.add(bodyAxes);
 
-// orientation gizmo drawn in a screen corner, in its own scene + ortho camera
+// WORLD axis: corner orientation gizmo in its own scene, FIXED to GEOM_AXIS so
+// it never moves when the robot-axis config changes
 const axisScene = new THREE.Scene();
-let cornerGizmo = makeAxisGizmo(1, 0.32);
+const cornerGizmo = makeAxisGizmo(1, 0.32, GEOM_AXIS);
 axisScene.add(cornerGizmo);
 const axisCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 20);
 
@@ -985,19 +986,15 @@ let axesOn = localStorage.getItem("pc-axes") === "1";
 function applyAxesVisible() { bodyAxes.visible = axesOn; }
 applyAxesVisible();
 
-// rebuild both gizmos after the mapping changes
+// rebuild only the robot-axis triad after the config changes (world stays put)
 function rebuildGizmos() {
   const yPos = bodyAxes.position.y;
   scene.remove(bodyAxes); disposeGroup(bodyAxes);
-  bodyAxes = makeAxisGizmo(62, 15);
+  bodyAxes = makeAxisGizmo(62, 15, axisMap);
   bodyAxes.position.y = yPos;
   bodyAxes.visible = axesOn;
   applyBodyOverlay(bodyAxes);
   scene.add(bodyAxes);
-
-  axisScene.remove(cornerGizmo); disposeGroup(cornerGizmo);
-  cornerGizmo = makeAxisGizmo(1, 0.32);
-  axisScene.add(cornerGizmo);
 }
 
 const axesBtn = document.getElementById("axes-btn");

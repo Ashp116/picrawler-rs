@@ -244,6 +244,7 @@
     <input id="ws-url" type="text" spellcheck="false" placeholder="ws://robot:8765">
     <button id="connect-btn" class="primary">Connect</button>
     <button id="demo-btn" title="Preview with generated data">Demo</button>
+    <button id="labels-btn" title="Show joint names and channels in 3D">Labels</button>
     <button id="theme-btn" title="Toggle light/dark">◐</button>
   </div>
 </div>
@@ -580,6 +581,58 @@ const matJoint  = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.
 const matFootAt = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.3 });
 const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 });
 
+/* ---- joint labels (name + channel), toggleable ---- */
+let labelsOn = localStorage.getItem("pc-labels") === "1";
+const allLabels = [];
+
+function drawLabel(entry) {
+  const ctx = entry.canvas.getContext("2d");
+  const { width: w, height: h } = entry.canvas;
+  ctx.clearRect(0, 0, w, h);
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = cssVar("--surface");
+  ctx.beginPath();
+  ctx.roundRect(2, 2, w - 4, h - 4, 14);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = cssVar("--baseline");
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = cssVar("--text-primary");
+  ctx.font = "600 30px ui-monospace, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(entry.text, w / 2, h / 2 + 2);
+  entry.tex.needsUpdate = true;
+}
+
+function makeLabel(text) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 72;
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sprite.scale.set(60, 17, 1);
+  sprite.renderOrder = 10;
+  sprite.visible = labelsOn;
+  const entry = { text, canvas, tex, sprite };
+  drawLabel(entry);
+  allLabels.push(entry);
+  scene.add(sprite);
+  return sprite;
+}
+
+const labelsBtn = document.getElementById("labels-btn");
+function syncLabelsBtn() { labelsBtn.classList.toggle("primary", labelsOn); }
+labelsBtn.addEventListener("click", () => {
+  labelsOn = !labelsOn;
+  localStorage.setItem("pc-labels", labelsOn ? "1" : "0");
+  for (const l of allLabels) l.sprite.visible = labelsOn;
+  syncLabelsBtn();
+});
+syncLabelsBtn();
+
 function applySceneTheme() {
   const bg = new THREE.Color(cssVar("--page"));
   scene.background = bg;
@@ -595,20 +648,21 @@ function applySceneTheme() {
   matJoint.color.set(cssVar("--text-secondary"));
   matFootAt.color.set(cssVar("--good"));
   matGhost.color.set(cssVar("--text-muted"));
+  for (const l of allLabels) drawLabel(l);
 }
 applySceneTheme();
 
-const BODY_H = 95; // mm, body center above the grid
+let bodyH = 95; // mm, body center above the grid — eased so the lowest foot rests on it
 
 // robot frame (x fwd, y left, z up) -> three frame (x right, y up, z back)
-function toThree(p) { return new THREE.Vector3(-p.y, p.z + BODY_H, -p.x); }
+function toThree(p) { return new THREE.Vector3(-p.y, p.z + bodyH, -p.x); }
 
 const body = new THREE.Mesh(new THREE.BoxGeometry(100, 36, 140), matBody);
-body.position.y = BODY_H;
+body.position.y = bodyH;
 scene.add(body);
 const nose = new THREE.Mesh(new THREE.ConeGeometry(9, 18, 4), matLeg);
 nose.rotation.x = -Math.PI / 2;
-nose.position.set(0, BODY_H, -80);
+nose.position.set(0, bodyH, -80);
 scene.add(nose);
 
 const segGeom   = new THREE.CylinderGeometry(3.2, 3.2, 1, 10);
@@ -617,7 +671,7 @@ const footGeom  = new THREE.SphereGeometry(4.5, 16, 12);
 
 const legVisuals = new Map(); // legId -> {segs[3], joints[3], foot, ghost}
 
-function makeLegVisual() {
+function makeLegVisual(leg) {
   const v = {
     segs: [0, 1, 2].map(() => new THREE.Mesh(segGeom, matLeg)),
     joints: [0, 1, 2].map(() => new THREE.Mesh(jointGeom, matJoint)),
@@ -625,6 +679,11 @@ function makeLegVisual() {
     ghost: new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]),
       matGhost),
+    // one label per servo, sitting at the joint that servo drives
+    labels: ["coxa", "femur", "tibia"].map((name) => {
+      const j = leg.joints.find((x) => x.name === name);
+      return makeLabel(j ? `${name} ch${j.channel}` : name);
+    }),
   };
   for (const s of v.segs) scene.add(s);
   for (const j of v.joints) scene.add(j);
@@ -642,56 +701,81 @@ function setSegment(mesh, a, b) {
   mesh.scale.set(1, len, 1);
 }
 
-/* schematic FK in the robot frame: coxa yaws the leg around the mount,
-   femur pitches down from near-horizontal, tibia bends relative to femur */
-function legChain(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
+/* FK matching the PiCrawler's zero pose:
+     coxa 0°  -> first segment points 45° diagonally outward, horizontal
+     femur 0° -> second segment points straight up
+     tibia 0° -> third segment lies flat horizontal (it rides on the femur)
+   Positive femur tips the knee outward, positive tibia folds the foot down,
+   positive coxa sweeps the leg toward the front of the body. */
+function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
   const rad = (d) => (d * Math.PI) / 180;
   const [mx, my] = mount;
-  const mirror = my >= 0 ? 1 : -1;
-  const dir = Math.atan2(my, mx) + rad(coxaDeg - 45) * mirror;
+  const sweepSign = my >= 0 ? -1 : 1;
+  const dir = Math.atan2(my, mx) + rad(coxaDeg) * sweepSign;
   const cd = Math.cos(dir), sd = Math.sin(dir);
 
-  const hip = { x: mx, y: my, z: 0 };
-  const coxaEnd = { x: mx + cd * geom.coxa_length_mm, y: my + sd * geom.coxa_length_mm, z: 0 };
+  const f = rad(femurDeg);              // angle from vertical
+  const ft = rad(femurDeg + tibiaDeg);  // tibia angle from horizontal, carried by the femur
 
-  const fPitch = rad(femurDeg - 20);
+  const hip = { x: mx, y: my, z: 0 };
+  const coxaEnd = {
+    x: mx + cd * geom.coxa_length_mm,
+    y: my + sd * geom.coxa_length_mm,
+    z: 0,
+  };
   const knee = {
-    x: coxaEnd.x + cd * Math.cos(fPitch) * geom.femur_length_mm,
-    y: coxaEnd.y + sd * Math.cos(fPitch) * geom.femur_length_mm,
-    z: coxaEnd.z - Math.sin(fPitch) * geom.femur_length_mm,
+    x: coxaEnd.x + cd * Math.sin(f) * geom.femur_length_mm,
+    y: coxaEnd.y + sd * Math.sin(f) * geom.femur_length_mm,
+    z: coxaEnd.z + Math.cos(f) * geom.femur_length_mm,
   };
-  const tPitch = fPitch + rad(tibiaDeg);
   const foot = {
-    x: knee.x + cd * Math.cos(tPitch) * geom.tibia_length_mm,
-    y: knee.y + sd * Math.cos(tPitch) * geom.tibia_length_mm,
-    z: knee.z - Math.sin(tPitch) * geom.tibia_length_mm,
+    x: knee.x + cd * Math.cos(ft) * geom.tibia_length_mm,
+    y: knee.y + sd * Math.cos(ft) * geom.tibia_length_mm,
+    z: knee.z - Math.sin(ft) * geom.tibia_length_mm,
   };
-  return [hip, coxaEnd, knee, foot].map(toThree);
+  return [hip, coxaEnd, knee, foot];
 }
 
 function renderRobot(snap) {
   const geom = snap.geometry || { coxa_length_mm: 33, femur_length_mm: 78, tibia_length_mm: 48 };
+
+  // first pass in the robot frame, so the body can settle onto the lowest foot
+  const chains = [];
+  let minZ = 0;
   for (const leg of snap.legs) {
     const coxa  = leg.joints.find((j) => j.name === "coxa");
     const femur = leg.joints.find((j) => j.name === "femur");
     const tibia = leg.joints.find((j) => j.name === "tibia");
     if (!coxa || !femur || !tibia) continue;
 
-    let v = legVisuals.get(leg.id);
-    if (!v) { v = makeLegVisual(); legVisuals.set(leg.id, v); }
-
-    const pts = legChain(leg.mount_offset_mm, geom,
+    const pts = legChainRobot(leg.mount_offset_mm, geom,
       coxa.angle_deg, femur.angle_deg, tibia.angle_deg);
+    const ghost = legChainRobot(leg.mount_offset_mm, geom,
+      coxa.target_deg, femur.target_deg, tibia.target_deg);
+    for (const p of pts) minZ = Math.min(minZ, p.z);
+    chains.push({ leg, pts, ghost, atTarget: coxa.at_target && femur.at_target && tibia.at_target });
+  }
+
+  const settledH = Math.max(30, -minZ + 2);
+  bodyH += (settledH - bodyH) * 0.15;
+  body.position.y = bodyH;
+  nose.position.y = bodyH;
+
+  for (const { leg, pts: raw, ghost: rawGhost, atTarget } of chains) {
+    let v = legVisuals.get(leg.id);
+    if (!v) { v = makeLegVisual(leg); legVisuals.set(leg.id, v); }
+
+    const pts = raw.map(toThree);
     for (let i = 0; i < 3; i++) {
       setSegment(v.segs[i], pts[i], pts[i + 1]);
       v.joints[i].position.copy(pts[i]);
+      v.labels[i].position.copy(pts[i]);
+      v.labels[i].position.y += 15;
     }
     v.foot.position.copy(pts[3]);
-    v.foot.material = (coxa.at_target && femur.at_target && tibia.at_target) ? matFootAt : matJoint;
+    v.foot.material = atTarget ? matFootAt : matJoint;
 
-    const ghostPts = legChain(leg.mount_offset_mm, geom,
-      coxa.target_deg, femur.target_deg, tibia.target_deg);
-    v.ghost.geometry.setFromPoints(ghostPts);
+    v.ghost.geometry.setFromPoints(rawGhost.map(toThree));
   }
 }
 

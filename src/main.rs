@@ -46,7 +46,7 @@ fn main() {
             match dwell_until {
                 None => {
                     println!("all servos reached target ({})", 45.0 * mul);
-                    dwell_until = Some(Instant::now() + Duration::from_secs(1));
+                    dwell_until = Some(Instant::now() + Duration::from_millis(100));
                 }
                 Some(t) if Instant::now() >= t => {
                     mul *= -1.0;

@@ -1140,9 +1140,8 @@ function toThree(p) {
 const body = new THREE.Mesh(new THREE.BoxGeometry(100, 36, 140), matBody);
 body.position.y = bodyH;
 scene.add(body);
+// front indicator; positioned + oriented along the robot +X axis each frame
 const nose = new THREE.Mesh(new THREE.ConeGeometry(9, 18, 4), matLeg);
-nose.rotation.x = -Math.PI / 2;
-nose.position.set(0, bodyH, -80);
 scene.add(nose);
 
 const segGeom   = new THREE.CylinderGeometry(3.2, 3.2, 1, 10);
@@ -1247,8 +1246,12 @@ function renderRobot(snap) {
   const settledH = Math.max(20, -minZ + 2);
   bodyH += (settledH - bodyH) * 0.15;
   body.position.y = bodyH;
-  nose.position.y = bodyH;
   bodyAxes.position.y = bodyH;
+
+  // front indicator rides along the robot +X axis per the current mapping
+  const fwd = robotAxisToThree("x");
+  nose.position.set(0, bodyH, 0).addScaledVector(fwd, 78);
+  nose.quaternion.setFromUnitVectors(UP, fwd);
 
   for (const { leg, pts: raw, ghost: rawGhost, joints, atTarget } of chains) {
     let v = legVisuals.get(leg.id);

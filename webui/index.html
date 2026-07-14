@@ -1312,8 +1312,9 @@ function handleSnapshot(snap) {
   renderRobot(snap);
 }
 
-/* a neutral zero-pose snapshot so the 3D viewer shows the robot
-   before any telemetry or demo has arrived */
+/* a neutral zero-pose snapshot so the 3D viewer shows the robot before any
+   telemetry or demo has arrived. Used as a fallback when /config.json isn't
+   reachable (e.g. opened via file://). */
 function neutralSnap() {
   const ids = ["front_left", "front_right", "back_left", "back_right"];
   const offs = [[60,60,0],[60,-60,0],[-60,60,0],[-60,-60,0]];
@@ -1330,8 +1331,35 @@ function neutralSnap() {
   };
 }
 
+// turn the /config.json payload into a zero-angle snapshot for the idle view
+function snapFromConfig(cfg) {
+  return {
+    type: "telemetry", name: cfg.name || "picrawler", battery_v: null, all_at_target: true,
+    geometry: cfg.geometry || { coxa_length_mm: 33, femur_length_mm: 48, tibia_length_mm: 78 },
+    legs: (cfg.legs || []).map((l) => ({
+      id: l.id, mount_offset_mm: l.mount_offset_mm,
+      joints: (l.joints || []).map((j) => ({
+        name: j.name, channel: j.channel, angle_deg: 0, target_deg: 0,
+        min_deg: j.min_deg, max_deg: j.max_deg, direction: j.direction, at_target: true,
+      })),
+    })),
+  };
+}
+
 handleSnapshot(neutralSnap());
 log("dashboard ready — connect to the robot or start demo mode", "sys");
+
+// pull the real robot description from the host so the idle view shows the
+// actual config (leg names, geometry) instead of the placeholder
+fetch("config.json")
+  .then((r) => (r.ok ? r.json() : Promise.reject()))
+  .then((cfg) => {
+    if (!cfg || !cfg.legs || !cfg.legs.length) return;
+    if (wantConnect || demoTimer) return;   // don't clobber a live/demo view
+    handleSnapshot(snapFromConfig(cfg));
+    log(`loaded config for ${cfg.name || "robot"} (${cfg.legs.length} legs)`, "sys");
+  })
+  .catch(() => { /* not served (e.g. file://) — keep the placeholder */ });
 </script>
 </body>
 </html>

@@ -41,7 +41,8 @@ fn main() {
     };
 
     if robot.config.telemetry.enable && robot.config.telemetry.webui.enable {
-        if let Err(e) = webui::start(&robot.config.telemetry.webui) {
+        let config_json = webui::config_json(&robot.config);
+        if let Err(e) = webui::start(&robot.config.telemetry.webui, config_json) {
             eprintln!("webui: failed to start: {}", e);
         }
     }

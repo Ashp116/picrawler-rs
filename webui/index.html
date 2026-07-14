@@ -466,7 +466,7 @@ function startDemo() {
   let t = 0;
   const legIds = ["front_left", "front_right", "back_left", "back_right"];
   const offsets = [[60,60,0],[60,-60,0],[-60,60,0],[-60,-60,0]];
-  const coxaDirs = { front_left: -1, front_right: -1, back_left: -1, back_right: -1 };
+  const coxaDirs = { front_left: 1, front_right: 1, back_left: 1, back_right: 1 };
   demoTimer = setInterval(() => {
     t += 0.05;
     const target = Math.sin(t / 2) > 0 ? 45 : 0;

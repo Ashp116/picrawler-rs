@@ -2,7 +2,7 @@ name: picrawler
 
 telemetry:
   enable: true
-  rate_hz: 20 # snapshots per second pushed to each client
+  rate_hz: 60 # snapshots per second pushed to each client
   socket:
     bind: 0.0.0.0
     port: 8765 # websocket telemetry tunnel (ws://<host>:8765)
@@ -38,28 +38,28 @@ geometry:
 #   femur/tibia: +1 = positive angle extends the leg outward/down (all legs
 #                extend together).
 legs:
-  - id: front_left
+  - id: back_left
     mount_offset_mm: [60, 60, 0]
     joints:
       - { name: coxa,  channel: 0,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 1,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 2,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
-  - id: front_right
+  - id: front_left
     mount_offset_mm: [60, -60, 0]
     joints:
       - { name: coxa,  channel: 3,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 4,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 5,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
-  - id: back_left
+  - id: back_right
     mount_offset_mm: [-60, 60, 0]
     joints:
       - { name: coxa,  channel: 6,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 7,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 8,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
-  - id: back_right
+  - id: front_right
     mount_offset_mm: [-60, -60, 0]
     joints:
       - { name: coxa,  channel: 9,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }

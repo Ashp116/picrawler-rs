@@ -883,13 +883,15 @@ const matJoint  = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.
 const matFootAt = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.3 });
 const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 });
 
-/* ---- configurable robot-axis mapping ----
-   The robot frame (x,y,z) maps to three.js (screen right, up, depth). Each
-   screen slot = sign * one robot axis. This is user-editable and persisted,
-   and drives both toThree() and the axis gizmos below. */
-// default view: robot rotated 90° right (CW from above) so the front sits
-// between the front legs — x:+x, y:+z, z:-y (a proper rotation about vertical)
-const AXIS_DEFAULT = { x: { src: "x", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "y", sign: -1 } };
+/* ---- axis mappings ----
+   A mapping sends the robot frame (x,y,z) to three.js (screen right, up, depth),
+   each screen slot = sign * one robot axis.
+
+   GEOM_AXIS is FIXED: the legs / body always render in this frame, so tweaking
+   the config never spins the robot. axisMap is the user-editable, persisted
+   mapping that only drives the axis gizmos + the front-indicator nose. */
+const GEOM_AXIS = { x: { src: "x", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "y", sign: -1 } };
+const AXIS_DEFAULT = structuredClone(GEOM_AXIS);
 const axisMap = loadAxisMap();
 function loadAxisMap() {
   try {
@@ -900,20 +902,21 @@ function loadAxisMap() {
 }
 function saveAxisMap() { localStorage.setItem("pc-axismap", JSON.stringify(axisMap)); }
 
-// one screen component from a robot point, per the current mapping
-function axisComp(p, slot) { return axisMap[slot].sign * p[axisMap[slot].src]; }
-// three.js direction that robot axis `r` ("x"/"y"/"z") points along
-function robotAxisToThree(r) {
+// one screen component of a robot point under a given mapping
+function axisComp(map, p, slot) { return map[slot].sign * p[map[slot].src]; }
+// three.js direction that robot axis `r` ("x"/"y"/"z") points along, under `map`
+function mapAxisToThree(map, r) {
   return new THREE.Vector3(
-    axisMap.x.src === r ? axisMap.x.sign : 0,
-    axisMap.y.src === r ? axisMap.y.sign : 0,
-    axisMap.z.src === r ? axisMap.z.sign : 0);
+    map.x.src === r ? map.x.sign : 0,
+    map.y.src === r ? map.y.sign : 0,
+    map.z.src === r ? map.z.sign : 0);
 }
+// gizmo axes follow the configurable mapping
 function axisDefs() {
   return [
-    { dir: robotAxisToThree("x"), color: 0xe5533d, label: "X" }, // robot forward
-    { dir: robotAxisToThree("y"), color: 0x35b56a, label: "Y" }, // robot left
-    { dir: robotAxisToThree("z"), color: 0x3987e5, label: "Z" }, // robot up
+    { dir: mapAxisToThree(axisMap, "x"), color: 0xe5533d, label: "X" }, // robot forward
+    { dir: mapAxisToThree(axisMap, "y"), color: 0x35b56a, label: "Y" }, // robot left
+    { dir: mapAxisToThree(axisMap, "z"), color: 0x3987e5, label: "Z" }, // robot up
   ];
 }
 
@@ -1133,10 +1136,13 @@ applySceneTheme();
 
 let bodyH = 95; // mm, body center above the grid — eased so the lowest foot rests on it
 
-// robot frame -> three frame, per the configurable axis mapping (axisComp);
-// bodyH raises the whole robot along screen-up (three.js Y)
+// robot frame -> three frame in the FIXED geometry mapping, so the legs never
+// move when the axis config changes; bodyH raises the robot along screen-up
 function toThree(p) {
-  return new THREE.Vector3(axisComp(p, "x"), axisComp(p, "y") + bodyH, axisComp(p, "z"));
+  return new THREE.Vector3(
+    axisComp(GEOM_AXIS, p, "x"),
+    axisComp(GEOM_AXIS, p, "y") + bodyH,
+    axisComp(GEOM_AXIS, p, "z"));
 }
 
 const body = new THREE.Mesh(new THREE.BoxGeometry(100, 36, 140), matBody);
@@ -1250,8 +1256,8 @@ function renderRobot(snap) {
   body.position.y = bodyH;
   bodyAxes.position.y = bodyH;
 
-  // front indicator rides along the robot +X axis per the current mapping
-  const fwd = robotAxisToThree("x");
+  // front indicator rides along the configurable +X axis (part of "the axis")
+  const fwd = mapAxisToThree(axisMap, "x");
   nose.position.set(0, bodyH, 0).addScaledVector(fwd, 78);
   nose.quaternion.setFromUnitVectors(UP, fwd);
 

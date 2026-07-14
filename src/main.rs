@@ -41,7 +41,7 @@ fn main() {
     let mut mul = 1.0;
 
     // call ONCE to set target
-    robot.set_servo_angle(90.0);
+    robot.set_servo_angle(45.0);
 
     // call every frame to advance toward it, using the real elapsed time since the last tick
     let mut last_tick = Instant::now();
@@ -51,6 +51,7 @@ fn main() {
         last_tick = now;
 
         robot.tick(dt_ms);
+        println!("dt={:.2}ms ch0_angle={:.2}", dt_ms, robot.get_servo_angle(0).unwrap_or(f32::NAN));
         thread::sleep(Duration::from_millis(10));
     }
         

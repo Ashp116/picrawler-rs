@@ -119,4 +119,8 @@ impl Robot {
     pub fn tick(&mut self, dt_ms: f32) {
         self.servo_group.tick(dt_ms);
     }
+
+    pub fn get_servo_angle(&self, channel: u8) -> Option<f32> {
+        self.servo_group.get_angle(channel)
+    }
 }

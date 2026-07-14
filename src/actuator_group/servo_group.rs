@@ -71,4 +71,8 @@ impl ServoGroup {
     pub fn get_num_servos(&self) -> usize {
         self.servos.len()
     }
+
+    pub fn get_angle(&self, channel: u8) -> Option<f32> {
+        self.servos.get(&channel).map(|s| s.current_angle)
+    }
 }

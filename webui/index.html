@@ -303,6 +303,7 @@
     <button id="connect-btn" class="primary">Connect</button>
     <button id="demo-btn" title="Preview with generated data">Demo</button>
     <button id="labels-btn" title="Show joint names and channels in 3D">Labels</button>
+    <button id="leg-names-btn" title="Show leg names from config in 3D">Leg names</button>
     <button id="theme-btn" title="Toggle light/dark">◐</button>
   </div>
 </div>
@@ -822,9 +823,12 @@ const matJoint  = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.
 const matFootAt = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.3 });
 const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 });
 
-/* ---- joint labels (name + channel), toggleable ---- */
+/* ---- 3D text labels, in two independently-toggled groups:
+     "joint" = per-servo name + channel · "leg" = leg id from config ---- */
 let labelsOn = localStorage.getItem("pc-labels") === "1";
+let legNamesOn = localStorage.getItem("pc-legnames") === "1";
 const allLabels = [];
+const groupOn = (group) => (group === "leg" ? legNamesOn : labelsOn);
 
 function drawLabel(entry) {
   const ctx = entry.canvas.getContext("2d");
@@ -847,7 +851,7 @@ function drawLabel(entry) {
   entry.tex.needsUpdate = true;
 }
 
-function makeLabel(text) {
+function makeLabel(text, group) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 72;
@@ -856,23 +860,29 @@ function makeLabel(text) {
     new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
   sprite.scale.set(60, 17, 1);
   sprite.renderOrder = 10;
-  sprite.visible = labelsOn;
-  const entry = { text, canvas, tex, sprite };
+  sprite.visible = groupOn(group);
+  const entry = { text, canvas, tex, sprite, group };
   drawLabel(entry);
   allLabels.push(entry);
   scene.add(sprite);
   return sprite;
 }
 
-const labelsBtn = document.getElementById("labels-btn");
-function syncLabelsBtn() { labelsBtn.classList.toggle("primary", labelsOn); }
-labelsBtn.addEventListener("click", () => {
-  labelsOn = !labelsOn;
-  localStorage.setItem("pc-labels", labelsOn ? "1" : "0");
-  for (const l of allLabels) l.sprite.visible = labelsOn;
-  syncLabelsBtn();
-});
-syncLabelsBtn();
+function wireLabelToggle(btnId, group, storeKey, get, set) {
+  const btn = document.getElementById(btnId);
+  const sync = () => btn.classList.toggle("primary", get());
+  btn.addEventListener("click", () => {
+    set(!get());
+    localStorage.setItem(storeKey, get() ? "1" : "0");
+    for (const l of allLabels) if (l.group === group) l.sprite.visible = get();
+    sync();
+  });
+  sync();
+}
+wireLabelToggle("labels-btn", "joint", "pc-labels",
+  () => labelsOn, (v) => (labelsOn = v));
+wireLabelToggle("leg-names-btn", "leg", "pc-legnames",
+  () => legNamesOn, (v) => (legNamesOn = v));
 
 function applySceneTheme() {
   const bg = new THREE.Color(cssVar("--page"));
@@ -923,8 +933,10 @@ function makeLegVisual(leg) {
     // one label per servo, sitting at the joint that servo drives
     labels: ["coxa", "femur", "tibia"].map((name) => {
       const j = leg.joints.find((x) => x.name === name);
-      return makeLabel(j ? `${name} ch${j.channel}` : name);
+      return makeLabel(j ? `${name} ch${j.channel}` : name, "joint");
     }),
+    // config leg id, floating above the hip
+    legLabel: makeLabel(leg.id, "leg"),
   };
   for (const s of v.segs) scene.add(s);
   for (const j of v.joints) scene.add(j);
@@ -1017,6 +1029,8 @@ function renderRobot(snap) {
       v.labels[i].position.copy(pts[i]);
       v.labels[i].position.y += 15;
     }
+    v.legLabel.position.copy(pts[0]);
+    v.legLabel.position.y += 34;
     v.foot.position.copy(pts[3]);
     v.foot.material = atTarget ? matFootAt : matJoint;
 

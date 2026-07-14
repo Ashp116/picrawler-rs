@@ -116,6 +116,10 @@ impl Robot {
         }
     }
 
+    pub fn set_joint_angle(&mut self, channel: u8, angle: f32) {
+        self.servo_group.set_target(channel, angle);
+    }
+
     pub fn tick(&mut self, dt_ms: f32) {
         self.servo_group.tick(dt_ms);
     }

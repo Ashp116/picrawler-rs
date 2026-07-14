@@ -64,6 +64,6 @@ pub fn reset_mcu() {
 }
 
 pub fn get_battery_voltage() -> Result<f32, Error> {
-    let voltage = adc::read_voltage(adc::CHANNEL::ADC4).unwrap();
+    let voltage = adc::read_voltage(adc::CHANNEL::ADC4)?;
     Ok(voltage * 3_f32)
 }

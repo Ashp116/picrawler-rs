@@ -42,17 +42,27 @@ fn main() {
     println!("{}", robot.name);
     let mut mul = 1.0;
 
-    // call ONCE to set target
-    robot.set_servo_angle(45.0);
+    // brownout test: move ONE servo instead of all 12 to keep the current draw low
+    robot.set_joint_angle(0, 45.0);
 
     // call every frame to advance toward it, using the real elapsed time since the last tick
     let mut last_tick = Instant::now();
+    let mut last_vbat = Instant::now();
     loop {
         let now = Instant::now();
         let dt_ms = now.duration_since(last_tick).as_secs_f32() * 1000.0;
         last_tick = now;
 
         robot.tick(dt_ms);
+
+        if last_vbat.elapsed() >= Duration::from_secs(1) {
+            last_vbat = Instant::now();
+            match device::get_battery_voltage() {
+                Ok(v) => println!("battery: {:.2}V", v),
+                Err(e) => eprintln!("battery read failed: {:?}", e),
+            }
+        }
+
         thread::sleep(Duration::from_millis(10));
     }
         

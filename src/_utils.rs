@@ -28,21 +28,21 @@ pub mod adc {
     }
 
     pub fn read_raw(channel: CHANNEL) -> Result<u16, Error> {
-        let mut i2c = I2c::with_bus(1).unwrap();
-        i2c.set_slave_address(0x14).unwrap();
-        
+        let mut i2c = I2c::with_bus(1).map_err(|_| Error)?;
+        i2c.set_slave_address(0x14).map_err(|_| Error)?;
+
         let command = (channel.value() >> 16) as u8;
-        i2c.smbus_write_word(command, 0u16).unwrap();
+        i2c.smbus_write_word(command, 0u16).map_err(|_| Error)?;
 
         let mut buf = [0u8; 2];
-        i2c.read(&mut buf).unwrap();
+        i2c.read(&mut buf).map_err(|_| Error)?;
 
         let value = (buf[0] as u16) << 8 | (buf[1] as u16) ;
         Ok(value)
     }
 
     pub fn read_voltage(channel: CHANNEL) -> Result<f32, Error> {
-        let value = read_raw(channel).unwrap();
+        let value = read_raw(channel)?;
         let voltage = ((value as f32) / 4095_f32) * 3.3;
 
         Ok(voltage)

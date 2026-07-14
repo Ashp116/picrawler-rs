@@ -1,5 +1,17 @@
 name: picrawler
 
+telemetry:
+  enable: true
+  rate_hz: 20 # snapshots per second pushed to each client
+  socket:
+    bind: 0.0.0.0
+    port: 8765 # websocket telemetry tunnel (ws://<host>:8765)
+  webui:
+    enable: true
+    bind: 0.0.0.0
+    port: 8080 # static dashboard host (http://<host>:8080)
+    root: webui
+
 hardware:
   i2c:
     bus: 1
@@ -13,36 +25,43 @@ hardware:
       delay: 300 # ms. Delay after zero-ing.
 
 
+# pivot-to-pivot lengths, per SunFounder's kinematics (C=33 coxa, A=48 hip->knee, B=78 knee->foot fin)
 geometry:
   coxa_length_mm: 33
-  femur_length_mm: 78
-  tibia_length_mm: 48
+  femur_length_mm: 48
+  tibia_length_mm: 78
 
+# direction: servo mounting sense (+1/-1, default +1).
+#   coxa:        rotation about the vertical axis. All four share the same sign,
+#                so +angle yaws every leg the same world direction (-1 = CW from
+#                above / pinwheel). This is world-uniform, not per-leg local.
+#   femur/tibia: +1 = positive angle extends the leg outward/down (all legs
+#                extend together).
 legs:
   - id: front_left
     mount_offset_mm: [60, 60, 0]
     joints:
-      - { name: coxa,  channel: 0,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 0,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 1,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 2,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: front_right
     mount_offset_mm: [60, -60, 0]
     joints:
-      - { name: coxa,  channel: 3,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 3,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 4,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 5,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: back_left
     mount_offset_mm: [-60, 60, 0]
     joints:
-      - { name: coxa,  channel: 6,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 6,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 7,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 8,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: back_right
     mount_offset_mm: [-60, -60, 0]
     joints:
-      - { name: coxa,  channel: 9,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 9,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 10, calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 11, calibration_deg: 0, min_deg: 0, max_deg: 90 }

@@ -37,6 +37,7 @@ pub struct Joint {
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
+    pub direction: f32,
 }
 
 impl Joint {
@@ -48,6 +49,7 @@ impl Joint {
             calibration_deg: config.calibration_deg,
             min_deg: config.min_deg,
             max_deg: config.max_deg,
+            direction: config.direction,
         }
     }
 }
@@ -126,6 +128,10 @@ impl Robot {
 
     pub fn get_servo_angle(&self, channel: u8) -> Option<f32> {
         self.servo_group.get_angle(channel)
+    }
+
+    pub fn get_servo_target(&self, channel: u8) -> Option<f32> {
+        self.servo_group.get_target(channel)
     }
 
     pub fn is_servo_at_target(&self, channel: u8) -> Option<bool> {

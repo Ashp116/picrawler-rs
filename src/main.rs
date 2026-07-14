@@ -8,6 +8,8 @@ mod actuators;
 mod actuator_group;
 mod robot;
 mod robot_config;
+mod telemetry;
+mod webui;
 
 fn main() {
     println!("Hello, world, I am picrawler!");
@@ -26,12 +28,31 @@ fn main() {
     thread::sleep(Duration::from_millis(300));
     println!("{}", robot.name);
 
+    let telemetry = if robot.config.telemetry.enable {
+        match telemetry::TelemetryServer::start(&robot.config.telemetry) {
+            Ok(server) => Some(server),
+            Err(e) => {
+                eprintln!("telemetry: failed to start: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    if robot.config.telemetry.enable && robot.config.telemetry.webui.enable {
+        if let Err(e) = webui::start(&robot.config.telemetry.webui) {
+            eprintln!("webui: failed to start: {}", e);
+        }
+    }
+
     // set the target once; the tick loop below steps every servo toward it
     let mut mul = 1.0;
     robot.set_servo_angle(45.0 * mul);
 
     let mut last_tick = Instant::now();
     let mut last_vbat = Instant::now();
+    let mut battery_v: Option<f32> = None;
     // when the servos reach the target, dwell for 1s (without blocking the tick
     // loop) and then swing to the opposite side
     let mut dwell_until: Option<Instant> = None;
@@ -60,9 +81,16 @@ fn main() {
         if last_vbat.elapsed() >= Duration::from_secs(1) {
             last_vbat = Instant::now();
             match device::get_battery_voltage() {
-                Ok(v) => println!("battery: {:.2}V", v),
+                Ok(v) => {
+                    println!("battery: {:.2}V", v);
+                    battery_v = Some(v);
+                }
                 Err(e) => eprintln!("battery read failed: {:?}", e),
             }
+        }
+
+        if let Some(server) = &telemetry {
+            server.publish(&robot, battery_v);
         }
 
         thread::sleep(Duration::from_millis(10));

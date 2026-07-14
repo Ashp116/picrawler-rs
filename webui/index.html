@@ -304,6 +304,7 @@
     <button id="demo-btn" title="Preview with generated data">Demo</button>
     <button id="labels-btn" title="Show joint names and channels in 3D">Labels</button>
     <button id="leg-names-btn" title="Show leg names from config in 3D">Leg names</button>
+    <button id="axes-btn" title="Show robot axes and the orientation gizmo">Axes</button>
     <button id="theme-btn" title="Toggle light/dark">◐</button>
   </div>
 </div>
@@ -827,6 +828,67 @@ const matJoint  = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.
 const matFootAt = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.3 });
 const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 });
 
+/* ---- axis gizmos: a triad on the body + a camera-synced corner gizmo ----
+   Robot frame is x-fwd / y-left / z-up; toThree maps its unit vectors to the
+   three.js directions below, so the arrows show the true robot axes. */
+const AXES = [
+  { dir: new THREE.Vector3(0, 0, -1), color: 0xe5533d, label: "X" }, // forward
+  { dir: new THREE.Vector3(-1, 0, 0), color: 0x35b56a, label: "Y" }, // left
+  { dir: new THREE.Vector3(0, 1, 0),  color: 0x3987e5, label: "Z" }, // up
+];
+
+function makeAxisLetter(text, color, scale) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#" + color.toString(16).padStart(6, "0");
+  ctx.font = "bold 46px ui-monospace, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 32, 34);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sprite.renderOrder = 12;
+  sprite.scale.set(scale, scale, 1);
+  return sprite;
+}
+
+function makeAxisGizmo(len, letterScale) {
+  const g = new THREE.Group();
+  const head = len * 0.28, headW = len * 0.16;
+  for (const a of AXES) {
+    g.add(new THREE.ArrowHelper(a.dir, new THREE.Vector3(), len, a.color, head, headW));
+    const s = makeAxisLetter(a.label, a.color, letterScale);
+    s.position.copy(a.dir).multiplyScalar(len + head * 0.9);
+    g.add(s);
+  }
+  return g;
+}
+
+// triad sitting on the robot body
+const bodyAxes = makeAxisGizmo(62, 15);
+scene.add(bodyAxes);
+
+// orientation gizmo drawn in a screen corner, in its own scene + ortho camera
+const axisScene = new THREE.Scene();
+axisScene.add(makeAxisGizmo(1, 0.32));
+const axisCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 20);
+
+let axesOn = localStorage.getItem("pc-axes") === "1";
+function applyAxesVisible() { bodyAxes.visible = axesOn; }
+applyAxesVisible();
+
+const axesBtn = document.getElementById("axes-btn");
+function syncAxesBtn() { axesBtn.classList.toggle("primary", axesOn); }
+axesBtn.addEventListener("click", () => {
+  axesOn = !axesOn;
+  localStorage.setItem("pc-axes", axesOn ? "1" : "0");
+  applyAxesVisible();
+  syncAxesBtn();
+});
+syncAxesBtn();
+
 /* ---- 3D text labels, in two independently-toggled groups:
      "joint" = per-servo name + channel · "leg" = leg id from config ---- */
 let labelsOn = localStorage.getItem("pc-labels") === "1";
@@ -1022,6 +1084,7 @@ function renderRobot(snap) {
   bodyH += (settledH - bodyH) * 0.15;
   body.position.y = bodyH;
   nose.position.y = bodyH;
+  bodyAxes.position.y = bodyH;
 
   for (const { leg, pts: raw, ghost: rawGhost, atTarget } of chains) {
     let v = legVisuals.get(leg.id);
@@ -1053,9 +1116,31 @@ function resize() {
 new ResizeObserver(resize).observe(canvas.parentElement);
 resize();
 
+const _gizmoSize = new THREE.Vector2();
+function renderCornerGizmo() {
+  if (!axesOn) return;
+  const s = renderer.getSize(_gizmoSize);
+  // view the fixed gizmo axes from the same orientation as the main camera
+  axisCam.position.copy(camera.position).sub(controls.target).normalize().multiplyScalar(5);
+  axisCam.quaternion.copy(camera.quaternion);
+
+  const sz = 96, pad = 12;
+  const x = s.x - sz - pad, y = s.y - sz - pad; // top-right (GL origin is bottom-left)
+  renderer.setViewport(x, y, sz, sz);
+  renderer.setScissor(x, y, sz, sz);
+  renderer.setScissorTest(true);
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  renderer.render(axisScene, axisCam);
+  renderer.autoClear = true;
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, s.x, s.y);
+}
+
 renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
+  renderCornerGizmo();
 });
 
 /* ================= snapshot handler ================= */

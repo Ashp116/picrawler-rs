@@ -1006,8 +1006,9 @@ function renderRobot(snap) {
     const tibia = leg.joints.find((j) => j.name === "tibia");
     if (!coxa || !femur || !tibia) continue;
 
-    // coxa yaw sign comes from telemetry (uniform pinwheel fallback)
-    const dc = coxa.direction ?? -1;
+    // coxa yaw sign from telemetry, negated so the render spins the opposite
+    // way to the raw config direction (fallback pinwheel = +1)
+    const dc = -(coxa.direction ?? -1);
     const pts = legChainRobot(leg.mount_offset_mm, geom,
       coxa.angle_deg * dc, femur.angle_deg, tibia.angle_deg);
     const ghost = legChainRobot(leg.mount_offset_mm, geom,

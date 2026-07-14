@@ -182,6 +182,51 @@
     pointer-events: none;
   }
 
+  #axis-panel {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: 216px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    z-index: 6;
+  }
+  #axis-panel[hidden] { display: none; }
+  #axis-panel h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  #axis-panel .axis-note { font-size: 10.5px; color: var(--text-muted); margin-bottom: 9px; }
+  #axis-panel label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  #axis-panel select {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font: inherit;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  #axis-reset { width: 100%; margin-top: 4px; }
+
   /* ---------------- side panel ---------------- */
   #panel {
     width: 400px;
@@ -305,6 +350,7 @@
     <button id="labels-btn" title="Show joint names and channels in 3D">Labels</button>
     <button id="leg-names-btn" title="Show leg names from config in 3D">Leg names</button>
     <button id="axes-btn" title="Show robot axes and the orientation gizmo">Axes</button>
+    <button id="axis-cfg-btn" title="Configure the robot axis mapping">⚙</button>
     <button id="theme-btn" title="Toggle light/dark">◐</button>
   </div>
 </div>
@@ -318,6 +364,15 @@
       <div class="hud-chip"><small>telemetry</small><b id="hud-rate">—</b><span id="hud-rate-sub">no packets</span></div>
     </div>
     <div id="orbit-hint">drag orbit · scroll zoom · right-drag pan</div>
+
+    <div id="axis-panel" hidden>
+      <h3>Robot axis mapping</h3>
+      <div class="axis-note">Which robot axis maps to each screen direction.</div>
+      <label>Right <select id="axis-x"></select></label>
+      <label>Up <select id="axis-y"></select></label>
+      <label>Depth <select id="axis-z"></select></label>
+      <button id="axis-reset" class="small">Reset to default</button>
+    </div>
   </div>
 
   <div id="resizer" title="Drag to resize · double-click to reset"></div>
@@ -828,15 +883,39 @@ const matJoint  = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.
 const matFootAt = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.3 });
 const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 });
 
-/* ---- axis gizmos: a triad on the body + a camera-synced corner gizmo ----
-   Robot frame is x-fwd / y-left / z-up; toThree maps its unit vectors to the
-   three.js directions below, so the arrows show the true robot axes. */
-const AXES = [
-  { dir: new THREE.Vector3(0, 0, -1), color: 0xe5533d, label: "X" }, // forward
-  { dir: new THREE.Vector3(-1, 0, 0), color: 0x35b56a, label: "Y" }, // left
-  { dir: new THREE.Vector3(0, 1, 0),  color: 0x3987e5, label: "Z" }, // up
-];
+/* ---- configurable robot-axis mapping ----
+   The robot frame (x,y,z) maps to three.js (screen right, up, depth). Each
+   screen slot = sign * one robot axis. This is user-editable and persisted,
+   and drives both toThree() and the axis gizmos below. */
+const AXIS_DEFAULT = { x: { src: "y", sign: -1 }, y: { src: "z", sign: 1 }, z: { src: "x", sign: -1 } };
+const axisMap = loadAxisMap();
+function loadAxisMap() {
+  try {
+    const s = JSON.parse(localStorage.getItem("pc-axismap"));
+    if (s && s.x && s.y && s.z) return s;
+  } catch { /* fall through */ }
+  return structuredClone(AXIS_DEFAULT);
+}
+function saveAxisMap() { localStorage.setItem("pc-axismap", JSON.stringify(axisMap)); }
 
+// one screen component from a robot point, per the current mapping
+function axisComp(p, slot) { return axisMap[slot].sign * p[axisMap[slot].src]; }
+// three.js direction that robot axis `r` ("x"/"y"/"z") points along
+function robotAxisToThree(r) {
+  return new THREE.Vector3(
+    axisMap.x.src === r ? axisMap.x.sign : 0,
+    axisMap.y.src === r ? axisMap.y.sign : 0,
+    axisMap.z.src === r ? axisMap.z.sign : 0);
+}
+function axisDefs() {
+  return [
+    { dir: robotAxisToThree("x"), color: 0xe5533d, label: "X" }, // robot forward
+    { dir: robotAxisToThree("y"), color: 0x35b56a, label: "Y" }, // robot left
+    { dir: robotAxisToThree("z"), color: 0x3987e5, label: "Z" }, // robot up
+  ];
+}
+
+/* ---- axis gizmos: a triad on the body + a camera-synced corner gizmo ---- */
 function makeAxisLetter(text, color, scale) {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;
@@ -857,7 +936,8 @@ function makeAxisLetter(text, color, scale) {
 function makeAxisGizmo(len, letterScale) {
   const g = new THREE.Group();
   const head = len * 0.28, headW = len * 0.16;
-  for (const a of AXES) {
+  for (const a of axisDefs()) {
+    if (a.dir.lengthSq() === 0) continue; // skip a slot with no axis assigned
     g.add(new THREE.ArrowHelper(a.dir, new THREE.Vector3(), len, a.color, head, headW));
     const s = makeAxisLetter(a.label, a.color, letterScale);
     s.position.copy(a.dir).multiplyScalar(len + head * 0.9);
@@ -866,18 +946,54 @@ function makeAxisGizmo(len, letterScale) {
   return g;
 }
 
+function disposeGroup(g) {
+  g.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (o.material.map) o.material.map.dispose();
+      o.material.dispose();
+    }
+  });
+}
+// draw a body triad as an always-on-top overlay
+function applyBodyOverlay(g) {
+  g.traverse((o) => {
+    o.renderOrder = 999;
+    if (o.material) { o.material.depthTest = false; o.material.depthWrite = false; }
+  });
+}
+
+let lastSnap = null; // most recent snapshot, so config changes can re-render it
+
 // triad sitting on the robot body
-const bodyAxes = makeAxisGizmo(62, 15);
+let bodyAxes = makeAxisGizmo(62, 15);
+applyBodyOverlay(bodyAxes);
 scene.add(bodyAxes);
 
 // orientation gizmo drawn in a screen corner, in its own scene + ortho camera
 const axisScene = new THREE.Scene();
-axisScene.add(makeAxisGizmo(1, 0.32));
+let cornerGizmo = makeAxisGizmo(1, 0.32);
+axisScene.add(cornerGizmo);
 const axisCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 20);
 
 let axesOn = localStorage.getItem("pc-axes") === "1";
 function applyAxesVisible() { bodyAxes.visible = axesOn; }
 applyAxesVisible();
+
+// rebuild both gizmos after the mapping changes
+function rebuildGizmos() {
+  const yPos = bodyAxes.position.y;
+  scene.remove(bodyAxes); disposeGroup(bodyAxes);
+  bodyAxes = makeAxisGizmo(62, 15);
+  bodyAxes.position.y = yPos;
+  bodyAxes.visible = axesOn;
+  applyBodyOverlay(bodyAxes);
+  scene.add(bodyAxes);
+
+  axisScene.remove(cornerGizmo); disposeGroup(cornerGizmo);
+  cornerGizmo = makeAxisGizmo(1, 0.32);
+  axisScene.add(cornerGizmo);
+}
 
 const axesBtn = document.getElementById("axes-btn");
 function syncAxesBtn() { axesBtn.classList.toggle("primary", axesOn); }
@@ -888,6 +1004,43 @@ axesBtn.addEventListener("click", () => {
   syncAxesBtn();
 });
 syncAxesBtn();
+
+/* ---- axis mapping config panel ---- */
+const AXIS_OPTIONS = [
+  { v: "x:1",  t: "+X  forward" },
+  { v: "x:-1", t: "−X  back" },
+  { v: "y:1",  t: "+Y  left" },
+  { v: "y:-1", t: "−Y  right" },
+  { v: "z:1",  t: "+Z  up" },
+  { v: "z:-1", t: "−Z  down" },
+];
+const axisPanel = document.getElementById("axis-panel");
+document.getElementById("axis-cfg-btn").addEventListener("click", () => {
+  axisPanel.hidden = !axisPanel.hidden;
+});
+function applyAxisChange() {
+  saveAxisMap();
+  rebuildGizmos();
+  if (lastSnap) renderRobot(lastSnap);
+}
+function populateAxisSelects() {
+  for (const slot of ["x", "y", "z"]) {
+    const sel = document.getElementById("axis-" + slot);
+    sel.innerHTML = AXIS_OPTIONS.map((o) => `<option value="${o.v}">${o.t}</option>`).join("");
+    sel.value = `${axisMap[slot].src}:${axisMap[slot].sign}`;
+    sel.onchange = () => {
+      const [src, sign] = sel.value.split(":");
+      axisMap[slot] = { src, sign: Number(sign) };
+      applyAxisChange();
+    };
+  }
+}
+populateAxisSelects();
+document.getElementById("axis-reset").addEventListener("click", () => {
+  Object.assign(axisMap, structuredClone(AXIS_DEFAULT));
+  populateAxisSelects();
+  applyAxisChange();
+});
 
 /* ---- 3D text labels, in two independently-toggled groups:
      "joint" = per-servo name + channel · "leg" = leg id from config ---- */
@@ -971,8 +1124,11 @@ applySceneTheme();
 
 let bodyH = 95; // mm, body center above the grid — eased so the lowest foot rests on it
 
-// robot frame (x fwd, y left, z up) -> three frame (x right, y up, z back)
-function toThree(p) { return new THREE.Vector3(-p.y, p.z + bodyH, -p.x); }
+// robot frame -> three frame, per the configurable axis mapping (axisComp);
+// bodyH raises the whole robot along screen-up (three.js Y)
+function toThree(p) {
+  return new THREE.Vector3(axisComp(p, "x"), axisComp(p, "y") + bodyH, axisComp(p, "z"));
+}
 
 const body = new THREE.Mesh(new THREE.BoxGeometry(100, 36, 140), matBody);
 body.position.y = bodyH;
@@ -1146,6 +1302,7 @@ renderer.setAnimationLoop(() => {
 /* ================= snapshot handler ================= */
 function handleSnapshot(snap) {
   if (!snap || snap.type !== "telemetry" || !Array.isArray(snap.legs)) return;
+  lastSnap = snap;
   if (snap.name) {
     document.getElementById("robot-name").innerHTML = `${snap.name} <span>telemetry</span>`;
   }

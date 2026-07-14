@@ -394,7 +394,7 @@ function startDemo() {
   let t = 0;
   const legIds = ["front_left", "front_right", "back_left", "back_right"];
   const offsets = [[60,60,0],[60,-60,0],[-60,60,0],[-60,-60,0]];
-  const coxaDirs = { front_left: -1, front_right: 1, back_left: 1, back_right: -1 };
+  const coxaDirs = { front_left: -1, front_right: -1, back_left: -1, back_right: -1 };
   demoTimer = setInterval(() => {
     t += 0.05;
     const target = Math.sin(t / 2) > 0 ? 45 : 0;
@@ -710,9 +710,11 @@ function setSegment(mesh, a, b) {
      femur 0° -> riser points straight up (elevation = 90° - femur)
      tibia 0° -> fin extends horizontally outward (pitch below horizontal
                  = femur + tibia, i.e. the fin rides on the femur)
-   Each joint carries a hardware mounting sense (direction ±1 from robot.yaml):
-   effective angles below are already direction-multiplied, so positive means
-   coxa CCW-from-above, femur tips outward, tibia folds the fin down. */
+   Each joint carries a hardware mounting sense (direction ±1 from robot.yaml).
+   The coxa direction is the SAME sign on all four legs, so +coxa yaws every leg
+   the same world direction (a pinwheel), not a per-leg local sweep. Effective
+   angles below are already direction-multiplied: positive coxa = uniform world
+   yaw, positive femur tips the knee outward, positive tibia folds the fin down. */
 function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
   const rad = (d) => (d * Math.PI) / 180;
   const [mx, my] = mount;
@@ -753,8 +755,8 @@ function renderRobot(snap) {
     const tibia = leg.joints.find((j) => j.name === "tibia");
     if (!coxa || !femur || !tibia) continue;
 
-    // legacy fallback mirrors the coxa per side if telemetry predates `direction`
-    const dc = coxa.direction ?? (leg.mount_offset_mm[1] >= 0 ? -1 : 1);
+    // fallback to the uniform pinwheel sign if telemetry predates `direction`
+    const dc = coxa.direction ?? -1;
     const df = femur.direction ?? 1;
     const dt = tibia.direction ?? 1;
     const pts = legChainRobot(leg.mount_offset_mm, geom,

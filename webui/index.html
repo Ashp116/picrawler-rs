@@ -525,8 +525,12 @@ function renderHud(snap) {
   msgTimes.push(now);
   msgTimes = msgTimes.filter((t) => now - t < 3000);
   lastMsgAt = Date.now();
+  // rate over the true elapsed span of the retained samples (not a fixed 3 s
+  // divisor, which biases the estimate at the window edge)
+  const span = (now - msgTimes[0]) / 1000;
+  const rate = msgTimes.length > 1 && span > 0 ? (msgTimes.length - 1) / span : null;
   document.getElementById("hud-rate").textContent =
-    msgTimes.length > 1 ? (msgTimes.length / 3).toFixed(0) + " Hz" : "—";
+    rate ? rate.toFixed(0) + " Hz" : "—";
 
   const battEl = document.getElementById("hud-batt");
   const battSub = document.getElementById("hud-batt-sub");

@@ -68,7 +68,9 @@ impl TelemetryServer {
             config.socket.port
         );
 
-        let interval = Duration::from_millis((1000.0 / config.rate_hz.max(1.0)) as u64);
+        // seconds, not truncated whole ms: from_millis((1000/60) as u64) floors
+        // 16.67 -> 16 ms and streams at 62.5 Hz instead of the configured rate
+        let interval = Duration::from_secs_f32(1.0 / config.rate_hz.max(1.0));
         let latest_for_accept = Arc::clone(&latest);
 
         thread::spawn(move || {

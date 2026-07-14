@@ -119,6 +119,25 @@
   #viewport-wrap { position: relative; flex: 1; min-width: 0; }
   #viewport { position: absolute; inset: 0; display: block; }
 
+  /* drag gutter between viewport and side panel */
+  #resizer {
+    flex: 0 0 6px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 5;
+  }
+  #resizer::before {
+    content: "";
+    position: absolute;
+    inset: 0 2px;
+    background: var(--border);
+    transition: background 0.12s;
+  }
+  #resizer:hover::before, #resizer.dragging::before { background: var(--series-1); }
+  body.col-resizing { cursor: col-resize; user-select: none; }
+  body.col-resizing #viewport { pointer-events: none; }
+
   #hud {
     position: absolute;
     left: 12px;
@@ -166,7 +185,7 @@
   /* ---------------- side panel ---------------- */
   #panel {
     width: 400px;
-    max-width: 45vw;
+    flex: 0 0 auto;
     border-left: 1px solid var(--border);
     background: var(--surface);
     display: flex;
@@ -266,7 +285,8 @@
   @media (max-width: 880px) {
     #main { flex-direction: column; }
     #viewport-wrap { flex: none; height: 48vh; }
-    #panel { width: 100%; max-width: none; flex: 1; border-left: none; border-top: 1px solid var(--border); }
+    #resizer { display: none; }
+    #panel { width: 100% !important; flex: 1; border-left: none; border-top: 1px solid var(--border); }
   }
 </style>
 <script type="importmap">
@@ -297,6 +317,8 @@
     </div>
     <div id="orbit-hint">drag orbit · scroll zoom · right-drag pan</div>
   </div>
+
+  <div id="resizer" title="Drag to resize · double-click to reset"></div>
 
   <div id="panel">
     <div class="panel-head">
@@ -661,6 +683,47 @@ battChart.addEventListener("mouseleave", () => {
 });
 
 new ResizeObserver(() => renderBattChart()).observe(battChart);
+
+/* ================= resizable side panel ================= */
+(() => {
+  const panel = document.getElementById("panel");
+  const resizer = document.getElementById("resizer");
+  const DEFAULT_W = 400, MIN_W = 260;
+  const maxW = () => Math.min(innerWidth - 320, innerWidth * 0.75);
+  const clamp = (w) => Math.max(MIN_W, Math.min(w, maxW()));
+
+  const saved = parseInt(localStorage.getItem("pc-panel-w") || "", 10);
+  if (!isNaN(saved)) panel.style.width = clamp(saved) + "px";
+
+  let dragging = false;
+  resizer.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    resizer.setPointerCapture(e.pointerId);
+    resizer.classList.add("dragging");
+    document.body.classList.add("col-resizing");
+    e.preventDefault();
+  });
+  resizer.addEventListener("pointermove", (e) => {
+    if (dragging) panel.style.width = clamp(innerWidth - e.clientX) + "px";
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.classList.remove("col-resizing");
+    localStorage.setItem("pc-panel-w", parseInt(panel.style.width, 10));
+    try { resizer.releasePointerCapture(e.pointerId); } catch {}
+  }
+  resizer.addEventListener("pointerup", endDrag);
+  resizer.addEventListener("pointercancel", endDrag);
+  resizer.addEventListener("dblclick", () => {
+    panel.style.width = DEFAULT_W + "px";
+    localStorage.setItem("pc-panel-w", DEFAULT_W);
+  });
+  addEventListener("resize", () => {
+    if (panel.style.width) panel.style.width = clamp(parseInt(panel.style.width, 10)) + "px";
+  });
+})();
 
 const readoutBody = document.getElementById("readout-body");
 const readoutRows = new Map(); // legId -> {cells: {coxa,femur,tibia}}

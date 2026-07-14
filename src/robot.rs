@@ -37,6 +37,7 @@ pub struct Joint {
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
+    pub direction: f32,
 }
 
 impl Joint {
@@ -48,6 +49,7 @@ impl Joint {
             calibration_deg: config.calibration_deg,
             min_deg: config.min_deg,
             max_deg: config.max_deg,
+            direction: config.direction,
         }
     }
 }

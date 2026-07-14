@@ -109,6 +109,15 @@ pub struct JointConfig {
     pub calibration_deg: f32,
     pub min_deg: f32,
     pub max_deg: f32,
+    /// Servo mounting sense: +1 or -1. For coxa, +1 means a positive angle
+    /// sweeps the leg counter-clockwise seen from above; for femur/tibia,
+    /// +1 means a positive angle extends the leg outward/down.
+    #[serde(default = "default_direction")]
+    pub direction: f32,
+}
+
+fn default_direction() -> f32 {
+    1.0
 }
 
 #[derive(Debug, Deserialize)]

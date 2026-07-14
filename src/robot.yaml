@@ -31,31 +31,35 @@ geometry:
   femur_length_mm: 48
   tibia_length_mm: 78
 
+# direction: servo mounting sense (+1/-1, default +1).
+#   coxa:        +1 = positive angle sweeps the leg counter-clockwise from above
+#   femur/tibia: +1 = positive angle extends the leg outward/down
+# The coxa servos are mounted in diagonal pairs, so FL/BR twist opposite to FR/BL.
 legs:
   - id: front_left
     mount_offset_mm: [60, 60, 0]
     joints:
-      - { name: coxa,  channel: 0,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 0,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 1,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 2,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: front_right
     mount_offset_mm: [60, -60, 0]
     joints:
-      - { name: coxa,  channel: 3,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 3,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: 1 }
       - { name: femur, channel: 4,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 5,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: back_left
     mount_offset_mm: [-60, 60, 0]
     joints:
-      - { name: coxa,  channel: 6,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 6,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: 1 }
       - { name: femur, channel: 7,  calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 8,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
 
   - id: back_right
     mount_offset_mm: [-60, -60, 0]
     joints:
-      - { name: coxa,  channel: 9,  calibration_deg: 0, min_deg: 0, max_deg: 90 }
+      - { name: coxa,  channel: 9,  calibration_deg: 0, min_deg: 0, max_deg: 90, direction: -1 }
       - { name: femur, channel: 10, calibration_deg: 0, min_deg: 0,   max_deg: 90 }
       - { name: tibia, channel: 11, calibration_deg: 0, min_deg: 0, max_deg: 90 }

@@ -18,6 +18,7 @@ struct JointTelemetry {
     target_deg: f32,
     min_deg: f32,
     max_deg: f32,
+    direction: f32,
     at_target: bool,
 }
 
@@ -111,6 +112,7 @@ impl TelemetryServer {
                         target_deg: robot.get_servo_target(j.channel).unwrap_or(0.0),
                         min_deg: j.min_deg,
                         max_deg: j.max_deg,
+                        direction: j.direction,
                         at_target: robot.is_servo_at_target(j.channel).unwrap_or(true),
                     })
                     .collect(),

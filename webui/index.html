@@ -394,6 +394,7 @@ function startDemo() {
   let t = 0;
   const legIds = ["front_left", "front_right", "back_left", "back_right"];
   const offsets = [[60,60,0],[60,-60,0],[-60,60,0],[-60,-60,0]];
+  const coxaDirs = { front_left: -1, front_right: 1, back_left: 1, back_right: -1 };
   demoTimer = setInterval(() => {
     t += 0.05;
     const target = Math.sin(t / 2) > 0 ? 45 : 0;
@@ -412,6 +413,7 @@ function startDemo() {
             name, channel: li * 3 + ji,
             angle_deg: angle, target_deg: target,
             min_deg: 0, max_deg: 90,
+            direction: name === "coxa" ? coxaDirs[id] : 1,
             at_target: Math.abs(angle - target) < 2,
           };
         }),
@@ -708,13 +710,13 @@ function setSegment(mesh, a, b) {
      femur 0° -> riser points straight up (elevation = 90° - femur)
      tibia 0° -> fin extends horizontally outward (pitch below horizontal
                  = femur + tibia, i.e. the fin rides on the femur)
-   Positive femur tips the knee outward, positive tibia folds the fin down,
-   positive coxa sweeps the leg toward the front of the body. */
+   Each joint carries a hardware mounting sense (direction ±1 from robot.yaml):
+   effective angles below are already direction-multiplied, so positive means
+   coxa CCW-from-above, femur tips outward, tibia folds the fin down. */
 function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
   const rad = (d) => (d * Math.PI) / 180;
   const [mx, my] = mount;
-  const sweepSign = my >= 0 ? -1 : 1;
-  const dir = Math.atan2(my, mx) + rad(coxaDeg) * sweepSign;
+  const dir = Math.atan2(my, mx) + rad(coxaDeg);
   const cd = Math.cos(dir), sd = Math.sin(dir);
 
   const f = rad(femurDeg);              // angle from vertical
@@ -751,10 +753,14 @@ function renderRobot(snap) {
     const tibia = leg.joints.find((j) => j.name === "tibia");
     if (!coxa || !femur || !tibia) continue;
 
+    // legacy fallback mirrors the coxa per side if telemetry predates `direction`
+    const dc = coxa.direction ?? (leg.mount_offset_mm[1] >= 0 ? -1 : 1);
+    const df = femur.direction ?? 1;
+    const dt = tibia.direction ?? 1;
     const pts = legChainRobot(leg.mount_offset_mm, geom,
-      coxa.angle_deg, femur.angle_deg, tibia.angle_deg);
+      coxa.angle_deg * dc, femur.angle_deg * df, tibia.angle_deg * dt);
     const ghost = legChainRobot(leg.mount_offset_mm, geom,
-      coxa.target_deg, femur.target_deg, tibia.target_deg);
+      coxa.target_deg * dc, femur.target_deg * df, tibia.target_deg * dt);
     for (const p of pts) minZ = Math.min(minZ, p.z);
     chains.push({ leg, pts, ghost, atTarget: coxa.at_target && femur.at_target && tibia.at_target });
   }

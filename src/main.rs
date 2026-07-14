@@ -33,9 +33,7 @@ fn main() {
     //     i2c
     // }));
 
-    reset_mcu();
     // give the MCU time to boot before ServoGroup::new hits it with timer-config writes
-    thread::sleep(Duration::from_millis(200));
 
     let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
     thread::sleep(Duration::from_millis(300));
@@ -43,7 +41,7 @@ fn main() {
     let mut mul = 1.0;
 
     // brownout test: move ONE servo instead of all 12 to keep the current draw low
-    robot.set_joint_angle(0, 45.0);
+    robot.set_servo_angle(45.0);
 
     // call every frame to advance toward it, using the real elapsed time since the last tick
     let mut last_tick = Instant::now();

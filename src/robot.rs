@@ -89,7 +89,7 @@ impl Robot {
         }
 
         if config.hardware.servos.zero_on_start.enable {
-            servo_group.flush(0.0);
+            servo_group.flush_with_delay(0.0, 100);
             thread::sleep(Duration::from_millis(config.hardware.servos.zero_on_start.delay));
         }
 

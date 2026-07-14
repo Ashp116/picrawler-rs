@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
+    collections::HashMap, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, thread, time::Duration,
 };
 
 use rppal::i2c::I2c;
@@ -59,6 +58,17 @@ impl ServoGroup {
             if let Err(e) = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes()) {
                 eprintln!("i2c: pw write ch{} (pw={}) failed: {}", channel, pulse_width, e);
             }
+        }
+    }
+
+    pub fn flush_with_delay(&mut self, dt_ms: f32, delay_ms: u64) {
+        let bus = self.bus.lock().unwrap();
+        for (channel, servo) in self.servos.iter_mut() {
+            let (_angle, pulse_width, _done) = servo.tick(dt_ms);
+            if let Err(e) = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes()) {
+                eprintln!("i2c: pw write ch{} (pw={}) failed: {}", channel, pulse_width, e);
+            }
+            thread::sleep(Duration::from_millis(delay_ms));
         }
     }
 

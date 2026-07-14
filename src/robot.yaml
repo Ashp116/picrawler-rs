@@ -10,7 +10,7 @@ hardware:
   servos:
     zero_on_start: 
       enable: true 
-      delay: 1000 # ms. Delay after zero-ing.
+      delay: 300 # ms. Delay after zero-ing.
 
 
 geometry:

@@ -891,6 +891,8 @@ const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35
    the config never spins the robot. axisMap is the user-editable, persisted
    mapping that only drives the axis gizmos + the front-indicator nose. */
 const GEOM_AXIS = { x: { src: "x", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "y", sign: -1 } };
+// identity: the world-axis corner gizmo shows clean three.js X/Y/Z (no remap)
+const WORLD_AXIS = { x: { src: "x", sign: 1 }, y: { src: "y", sign: 1 }, z: { src: "z", sign: 1 } };
 const AXIS_DEFAULT = structuredClone(GEOM_AXIS);
 const axisMap = loadAxisMap();
 function loadAxisMap() {
@@ -975,10 +977,10 @@ let bodyAxes = makeAxisGizmo(62, 15, axisMap);
 applyBodyOverlay(bodyAxes);
 scene.add(bodyAxes);
 
-// WORLD axis: corner orientation gizmo in its own scene, FIXED to GEOM_AXIS so
-// it never moves when the robot-axis config changes
+// WORLD axis: corner orientation gizmo in its own scene, FIXED to WORLD_AXIS
+// (identity) so it never moves when the robot-axis config changes
 const axisScene = new THREE.Scene();
-const cornerGizmo = makeAxisGizmo(1, 0.32, GEOM_AXIS);
+const cornerGizmo = makeAxisGizmo(1, 0.32, WORLD_AXIS);
 axisScene.add(cornerGizmo);
 const axisCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 20);
 

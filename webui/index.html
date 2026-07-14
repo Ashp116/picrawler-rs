@@ -326,15 +326,7 @@
             <button data-v="1">+</button><button data-v="-1">−</button>
           </span>
         </div>
-        <div>
-          <div class="kin-row"><label>Fin coupling</label></div>
-          <span class="kin-seg" id="kin-tibia-mode" style="margin-top:5px;width:100%">
-            <button data-v="independent" style="flex:1">indep</button>
-            <button data-v="add" style="flex:1">+femur</button>
-            <button data-v="sub" style="flex:1">−femur</button>
-          </span>
-          <div class="kin-sub" id="kin-mode-sub"></div>
-        </div>
+        <div class="kin-sub">Signs flip a servo's mounting direction if a joint bends the wrong way.</div>
 
         <label class="kin-check"><input type="checkbox" id="kin-manual"> Manual pose (override telemetry)</label>
         <div id="kin-manual-wrap" class="off">
@@ -646,17 +638,10 @@ function logEvents(snap) {
    settings persist and feed legChainRobot(); coxa is the settled pinwheel. */
 let lastSnap = null;   // most recent snapshot, so panel tweaks can re-render it
 const kin = Object.assign(
-  { femurSign: 1, tibiaSign: 1, tibiaMode: "independent",
-    manual: false, coxa: 0, femur: 0, tibia: 0 },
+  { femurSign: 1, tibiaSign: 1, manual: false, coxa: 0, femur: 0, tibia: 0 },
   JSON.parse(localStorage.getItem("pc-kin") || "{}"));
 
 function saveKin() { localStorage.setItem("pc-kin", JSON.stringify(kin)); }
-
-const modeSub = {
-  independent: "fin pitch = tibia only",
-  add: "fin pitch = femur + tibia",
-  sub: "fin pitch = femur − tibia",
-};
 
 function paintSeg(id, value) {
   for (const b of document.querySelectorAll(`#${id} button`)) {
@@ -674,9 +659,6 @@ function wireSeg(id, key, after) {
 }
 wireSeg("kin-femur-sign", "femurSign");
 wireSeg("kin-tibia-sign", "tibiaSign");
-wireSeg("kin-tibia-mode", "tibiaMode",
-  () => (document.getElementById("kin-mode-sub").textContent = modeSub[kin.tibiaMode]));
-document.getElementById("kin-mode-sub").textContent = modeSub[kin.tibiaMode];
 
 const kinPanel = document.getElementById("kin-panel");
 if (localStorage.getItem("pc-kin-collapsed") === "1") kinPanel.classList.add("collapsed");
@@ -853,51 +835,40 @@ function setSegment(mesh, a, b) {
   mesh.scale.set(1, len, 1);
 }
 
-/* FK matching the PiCrawler's zero pose (verified against SunFounder's
-   coord2polar/polar2coord: femur = short 48mm riser hip->knee, tibia = long
-   78mm foot fin knee->tip):
-     coxa 0°  -> coxa arm points 45° diagonally outward, horizontal
-     femur 0° -> riser points straight up (elevation = 90° - femur)
-     tibia 0° -> fin extends horizontally outward. The fin's pitch below
-                 horizontal equals the tibia angle ALONE — it is decoupled from
-                 the femur (verified on hardware: tibia@45 and all@45 both give a
-                 45° fin), so the femur only relocates the knee, not the fin pitch.
-   Each joint carries a hardware mounting sense (direction ±1 from robot.yaml).
-   The coxa direction is the SAME sign on all four legs, so +coxa yaws every leg
-   the same world direction (a pinwheel), not a per-leg local sweep. Effective
-   angles below are already direction-multiplied: positive coxa = uniform world
-   yaw, positive femur tips the knee outward, positive tibia folds the fin down. */
+/* Forward kinematics taken straight from SunFounder's polar2coord — the exact
+   model for this robot. Lengths: A = femur (48, hip->knee), B = tibia (78,
+   knee->foot fin), C = coxa (33, horizontal offset from the yaw axis).
+     beta  = femur servo -> femur elevation from horizontal is (90 - beta):
+             beta 0 = riser straight up, beta 90 = femur horizontal.
+     alpha = tibia servo -> interior knee angle (between femur and tibia) is
+             (90 + alpha): alpha 0 = fin ⊥ femur (horizontal at rest),
+             +alpha opens the fin upward.
+     gamma = coxa yaw, applied as the leg's horizontal `dir` (uniform pinwheel).
+   Verified numerically: all-0 -> riser up & fin horizontal; +tibia lifts the
+   fin, +femur tips the whole leg down. femur/tibia sign come from the calibration
+   panel to absorb hardware mounting direction. */
 function legChainRobot(mount, geom, coxaDeg, femurRaw, tibiaRaw) {
   const rad = (d) => (d * Math.PI) / 180;
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
   const [mx, my] = mount;
   const dir = Math.atan2(my, mx) + rad(coxaDeg);
   const cd = Math.cos(dir), sd = Math.sin(dir);
 
-  // femur/tibia sign + fin coupling come from the live calibration panel
-  const femurDeg = femurRaw * kin.femurSign;
-  const tibiaDeg = tibiaRaw * kin.tibiaSign;
-  const f = rad(femurDeg);   // femur angle from vertical (positions the knee)
-  let finDeg = tibiaDeg;                                   // independent
-  if (kin.tibiaMode === "add") finDeg = femurDeg + tibiaDeg;
-  else if (kin.tibiaMode === "sub") finDeg = femurDeg - tibiaDeg;
-  const ft = rad(finDeg);    // fin pitch below horizontal
+  const A = geom.femur_length_mm, B = geom.tibia_length_mm, C = geom.coxa_length_mm;
+  const beta  = femurRaw * kin.femurSign;
+  const alpha = tibiaRaw * kin.tibiaSign;
 
-  const hip = { x: mx, y: my, z: 0 };
-  const coxaEnd = {
-    x: mx + cd * geom.coxa_length_mm,
-    y: my + sd * geom.coxa_length_mm,
-    z: 0,
-  };
-  const knee = {
-    x: coxaEnd.x + cd * Math.sin(f) * geom.femur_length_mm,
-    y: coxaEnd.y + sd * Math.sin(f) * geom.femur_length_mm,
-    z: coxaEnd.z + Math.cos(f) * geom.femur_length_mm,
-  };
-  const foot = {
-    x: knee.x + cd * Math.cos(ft) * geom.tibia_length_mm,
-    y: knee.y + sd * Math.cos(ft) * geom.tibia_length_mm,
-    z: knee.z - Math.sin(ft) * geom.tibia_length_mm,
-  };
+  // femur-tibia triangle: L1 = hip-to-foot distance in the leg plane
+  const L1 = Math.sqrt(A * A + B * B - 2 * A * B * Math.cos(rad(90 + alpha)));
+  const angInner = Math.acos(clamp((A * A + L1 * L1 - B * B) / (2 * A * L1), -1, 1));
+  const ang = rad(90 - beta) - angInner;   // elevation of the hip-foot line
+
+  // points live in (h = horizontal distance along dir, z = height)
+  const place = (h, z) => ({ x: mx + cd * h, y: my + sd * h, z });
+  const hip     = place(0, 0);
+  const coxaEnd = place(C, 0);
+  const knee    = place(C + A * Math.sin(rad(beta)), A * Math.cos(rad(beta)));
+  const foot    = place(C + L1 * Math.cos(ang), L1 * Math.sin(ang));
   return [hip, coxaEnd, knee, foot];
 }
 

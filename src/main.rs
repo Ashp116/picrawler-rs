@@ -67,7 +67,7 @@ fn main() {
         if robot.all_servos_at_target() {
             match dwell_until {
                 None => {
-                    println!("all servos reached target ({})", 45.0 * mul);
+                    //println!("all servos reached target ({})", 45.0 * mul);
                     dwell_until = Some(Instant::now() + Duration::from_millis(100));
                 }
                 Some(t) if Instant::now() >= t => {
@@ -83,7 +83,7 @@ fn main() {
             last_vbat = Instant::now();
             match device::get_battery_voltage() {
                 Ok(v) => {
-                    println!("battery: {:.2}V", v);
+                    //println!("battery: {:.2}V", v);
                     battery_v = Some(v);
                 }
                 Err(e) => eprintln!("battery read failed: {:?}", e),

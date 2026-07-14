@@ -1084,7 +1084,14 @@ function makeLabel(text, group) {
   drawLabel(entry);
   allLabels.push(entry);
   scene.add(sprite);
-  return sprite;
+  return entry;
+}
+
+// redraw a label only when its text actually changes
+function setLabelText(entry, text) {
+  if (entry.text === text) return;
+  entry.text = text;
+  drawLabel(entry);
 }
 
 function wireLabelToggle(btnId, group, storeKey, get, set) {
@@ -1152,11 +1159,8 @@ function makeLegVisual(leg) {
     ghost: new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]),
       matGhost),
-    // one label per servo, sitting at the joint that servo drives
-    labels: ["coxa", "femur", "tibia"].map((name) => {
-      const j = leg.joints.find((x) => x.name === name);
-      return makeLabel(j ? `${name} ch${j.channel}` : name, "joint");
-    }),
+    // one label per servo; its text + position are set each frame from the snapshot
+    labels: [0, 1, 2].map(() => makeLabel("", "joint")),
     // config leg id, floating above the hip
     legLabel: makeLabel(leg.id, "leg"),
   };
@@ -1232,7 +1236,11 @@ function renderRobot(snap) {
     const ghost = legChainRobot(leg.mount_offset_mm, geom,
       coxa.target_deg * dc, femur.target_deg, tibia.target_deg);
     for (const p of pts) minZ = Math.min(minZ, p.z);
-    chains.push({ leg, pts, ghost, atTarget: coxa.at_target && femur.at_target && tibia.at_target });
+    chains.push({
+      leg, pts, ghost,
+      joints: [coxa, femur, tibia],   // hip / coxaEnd / knee, in position order
+      atTarget: coxa.at_target && femur.at_target && tibia.at_target,
+    });
   }
 
   // feet above hip level -> nothing to stand on, so the chassis (36mm tall) rests on the ground
@@ -1242,7 +1250,7 @@ function renderRobot(snap) {
   nose.position.y = bodyH;
   bodyAxes.position.y = bodyH;
 
-  for (const { leg, pts: raw, ghost: rawGhost, atTarget } of chains) {
+  for (const { leg, pts: raw, ghost: rawGhost, joints, atTarget } of chains) {
     let v = legVisuals.get(leg.id);
     if (!v) { v = makeLegVisual(leg); legVisuals.set(leg.id, v); }
 
@@ -1250,11 +1258,14 @@ function renderRobot(snap) {
     for (let i = 0; i < 3; i++) {
       setSegment(v.segs[i], pts[i], pts[i + 1]);
       v.joints[i].position.copy(pts[i]);
-      v.labels[i].position.copy(pts[i]);
-      v.labels[i].position.y += 15;
+      // keep the label matching the config's joint name + channel
+      setLabelText(v.labels[i], `${joints[i].name} ch${joints[i].channel}`);
+      v.labels[i].sprite.position.copy(pts[i]);
+      v.labels[i].sprite.position.y += 15;
     }
-    v.legLabel.position.copy(pts[0]);
-    v.legLabel.position.y += 34;
+    setLabelText(v.legLabel, leg.id);
+    v.legLabel.sprite.position.copy(pts[0]);
+    v.legLabel.sprite.position.y += 34;
     v.foot.position.copy(pts[3]);
     v.foot.material = atTarget ? matFootAt : matJoint;
 

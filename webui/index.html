@@ -887,7 +887,9 @@ const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35
    The robot frame (x,y,z) maps to three.js (screen right, up, depth). Each
    screen slot = sign * one robot axis. This is user-editable and persisted,
    and drives both toThree() and the axis gizmos below. */
-const AXIS_DEFAULT = { x: { src: "y", sign: -1 }, y: { src: "z", sign: 1 }, z: { src: "x", sign: -1 } };
+// default view: robot rotated 90° right (CW from above) so the front sits
+// between the front legs — x:+x, y:+z, z:-y (a proper rotation about vertical)
+const AXIS_DEFAULT = { x: { src: "x", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "y", sign: -1 } };
 const axisMap = loadAxisMap();
 function loadAxisMap() {
   try {

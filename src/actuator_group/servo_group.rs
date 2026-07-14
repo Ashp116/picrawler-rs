@@ -25,8 +25,12 @@ impl ServoGroup {
         {
             let bus = bus.lock().unwrap();
             for (per_reg, psc_reg) in [(0x44u8, 0x40u8), (0x45, 0x41), (0x46, 0x42)] {
-                let _ = bus.smbus_write_word(per_reg, 4095u16.swap_bytes());
-                let _ = bus.smbus_write_word(psc_reg, 351u16.swap_bytes());
+                if let Err(e) = bus.smbus_write_word(per_reg, 4095u16.swap_bytes()) {
+                    eprintln!("i2c: period write to 0x{:02x} failed: {}", per_reg, e);
+                }
+                if let Err(e) = bus.smbus_write_word(psc_reg, 351u16.swap_bytes()) {
+                    eprintln!("i2c: prescaler write to 0x{:02x} failed: {}", psc_reg, e);
+                }
             }
         }
 
@@ -52,7 +56,9 @@ impl ServoGroup {
         let bus = self.bus.lock().unwrap();
         for (channel, servo) in self.servos.iter_mut() {
             let (_angle, pulse_width, _done) = servo.tick(dt_ms);
-            let _ = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes());
+            if let Err(e) = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes()) {
+                eprintln!("i2c: pw write ch{} (pw={}) failed: {}", channel, pulse_width, e);
+            }
         }
     }
 

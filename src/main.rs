@@ -34,6 +34,8 @@ fn main() {
     // }));
 
     reset_mcu();
+    // give the MCU time to boot before ServoGroup::new hits it with timer-config writes
+    thread::sleep(Duration::from_millis(200));
 
     let mut robot = Robot::from_yaml(config_path.to_string()).unwrap();
     thread::sleep(Duration::from_millis(300));

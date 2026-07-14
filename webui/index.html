@@ -708,8 +708,10 @@ function setSegment(mesh, a, b) {
    78mm foot fin knee->tip):
      coxa 0°  -> coxa arm points 45° diagonally outward, horizontal
      femur 0° -> riser points straight up (elevation = 90° - femur)
-     tibia 0° -> fin extends horizontally outward (pitch below horizontal
-                 = femur + tibia, i.e. the fin rides on the femur)
+     tibia 0° -> fin extends horizontally outward. The fin's pitch below
+                 horizontal equals the tibia angle ALONE — it is decoupled from
+                 the femur (verified on hardware: tibia@45 and all@45 both give a
+                 45° fin), so the femur only relocates the knee, not the fin pitch.
    Each joint carries a hardware mounting sense (direction ±1 from robot.yaml).
    The coxa direction is the SAME sign on all four legs, so +coxa yaws every leg
    the same world direction (a pinwheel), not a per-leg local sweep. Effective
@@ -721,8 +723,8 @@ function legChainRobot(mount, geom, coxaDeg, femurDeg, tibiaDeg) {
   const dir = Math.atan2(my, mx) + rad(coxaDeg);
   const cd = Math.cos(dir), sd = Math.sin(dir);
 
-  const f = rad(femurDeg);              // angle from vertical
-  const ft = rad(femurDeg + tibiaDeg);  // tibia angle from horizontal, carried by the femur
+  const f = rad(femurDeg);   // femur angle from vertical (positions the knee)
+  const ft = rad(tibiaDeg);  // fin pitch below horizontal — absolute, NOT carried by the femur
 
   const hip = { x: mx, y: my, z: 0 };
   const coxaEnd = {

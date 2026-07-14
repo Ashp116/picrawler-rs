@@ -891,6 +891,8 @@ const matGhost  = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35
    the config never spins the robot. axisMap is the user-editable, persisted
    mapping that only drives the axis gizmos + the front-indicator nose. */
 const GEOM_AXIS = { x: { src: "y", sign: 1 }, y: { src: "z", sign: 1 }, z: { src: "x", sign: 1 } };
+// identity: the world-axis corner gizmo shows clean three.js X/Y/Z (no remap)
+const WORLD_AXIS = { x: { src: "x", sign: 1 }, y: { src: "y", sign: 1 }, z: { src: "z", sign: 1 } };
 const AXIS_DEFAULT = structuredClone(GEOM_AXIS);
 const axisMap = loadAxisMap();
 function loadAxisMap() {

@@ -127,4 +127,12 @@ impl Robot {
     pub fn get_servo_angle(&self, channel: u8) -> Option<f32> {
         self.servo_group.get_angle(channel)
     }
+
+    pub fn is_servo_at_target(&self, channel: u8) -> Option<bool> {
+        self.servo_group.is_at_target(channel)
+    }
+
+    pub fn all_servos_at_target(&self) -> bool {
+        self.servo_group.all_at_target()
+    }
 }

@@ -7,7 +7,6 @@ use crate::actuators::Servo;
 
 pub struct ServoGroup {
     servos: HashMap<u8, Servo>,
-    targets: HashMap<u8, f32>,
     estop: Arc<AtomicBool>,
     bus: Arc<Mutex<I2c>>,
 }
@@ -16,7 +15,6 @@ impl ServoGroup {
     pub fn new(bus: Arc<Mutex<I2c>>) -> Self {
         let group = ServoGroup {
             servos: HashMap::new(),
-            targets: HashMap::new(),
             estop: Arc::new(AtomicBool::new(false)),
             bus: Arc::clone(&bus),
         };
@@ -41,24 +39,17 @@ impl ServoGroup {
         if disable_zero != Some(true) {
             servo.soft_set_angle(0.0);
         }
-        self.targets.insert(channel, 0.0);
         self.servos.insert(channel, servo);
     }
 
-   pub fn set_target(&mut self, channel: u8, target_angle: f32) {
+    pub fn set_target(&mut self, channel: u8, target_angle: f32) {
         if let Some(servo) = self.servos.get_mut(&channel) {
             servo.set_target(target_angle, 90.0);
         }
     }
 
     pub fn flush(&mut self, dt_ms: f32) {
-        let bus = self.bus.lock().unwrap();
-        for (channel, servo) in self.servos.iter_mut() {
-            let (_angle, pulse_width, _done) = servo.tick(dt_ms);
-            if let Err(e) = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes()) {
-                eprintln!("i2c: pw write ch{} (pw={}) failed: {}", channel, pulse_width, e);
-            }
-        }
+        self.flush_with_delay(dt_ms, 0);
     }
 
     pub fn flush_with_delay(&mut self, dt_ms: f32, delay_ms: u64) {
@@ -68,7 +59,9 @@ impl ServoGroup {
             if let Err(e) = bus.smbus_write_word(0x20 + channel, pulse_width.swap_bytes()) {
                 eprintln!("i2c: pw write ch{} (pw={}) failed: {}", channel, pulse_width, e);
             }
-            thread::sleep(Duration::from_millis(delay_ms));
+            if delay_ms > 0 {
+                thread::sleep(Duration::from_millis(delay_ms));
+            }
         }
     }
 
@@ -90,5 +83,15 @@ impl ServoGroup {
 
     pub fn get_angle(&self, channel: u8) -> Option<f32> {
         self.servos.get(&channel).map(|s| s.current_angle)
+    }
+
+    /// True once the servo on `channel` has reached its goal position; None if the channel is unknown.
+    pub fn is_at_target(&self, channel: u8) -> Option<bool> {
+        self.servos.get(&channel).map(|s| s.is_at_target())
+    }
+
+    /// True once every servo in the group has reached its goal position.
+    pub fn all_at_target(&self) -> bool {
+        self.servos.values().all(|s| s.is_at_target())
     }
 }

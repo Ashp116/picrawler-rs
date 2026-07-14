@@ -66,6 +66,15 @@ impl Servo {
         self.velocity = delta / total_time_ms;
     }
 
+    /// True once the servo has finished stepping and is holding its goal position.
+    pub fn is_at_target(&self) -> bool {
+        self.velocity == 0.0
+    }
+
+    pub fn get_target(&self) -> f32 {
+        self.target
+    }
+
     /// Advances the servo by `dt_ms` of real elapsed time. Returns (angle, pulse_width, done).
     pub fn tick(&mut self, dt_ms: f32) -> (f32, u16, bool) {
         if self.velocity == 0.0 {

@@ -980,7 +980,7 @@ scene.add(bodyAxes);
 // WORLD axis: corner orientation gizmo in its own scene, FIXED to WORLD_AXIS
 // (identity) so it never moves when the robot-axis config changes
 const axisScene = new THREE.Scene();
-const cornerGizmo = makeAxisGizmo(1, 0.32, WORLD_AXIS);
+const cornerGizmo = makeAxisGizmo(1, 0.6, WORLD_AXIS);
 axisScene.add(cornerGizmo);
 const axisCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 20);
 

@@ -1283,14 +1283,28 @@ function renderRobot(snap) {
   }
 }
 
+let _dprMedia = null;
 function resize() {
   const w = canvas.parentElement.clientWidth;
   const h = canvas.parentElement.clientHeight;
+  if (w === 0 || h === 0) return;            // collapsed viewport — keep last good projection
+
+  // pick up DPI changes (browser zoom, dragging the window to a monitor with a
+  // different pixel density) so the scene isn't rendered under- or over-sampled
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+
+  // A devicePixelRatio change doesn't alter the element's CSS-pixel size, so the
+  // ResizeObserver below never fires for it. Re-arm a one-shot media query that
+  // trips the next time the ratio changes.
+  if (_dprMedia) _dprMedia.removeEventListener("change", resize);
+  _dprMedia = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
+  _dprMedia.addEventListener("change", resize, { once: true });
 }
 new ResizeObserver(resize).observe(canvas.parentElement);
+addEventListener("resize", resize);
 resize();
 
 const _gizmoSize = new THREE.Vector2();

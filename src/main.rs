@@ -1,6 +1,6 @@
 use std::{env, thread, time::{Duration, Instant}};
 
-use crate::robot::Robot;
+use crate::{camera::cam_mgr::cam_mgr, robot::Robot};
 
 mod device;
 mod _utils;
@@ -10,9 +10,10 @@ mod robot;
 mod robot_config;
 mod telemetry;
 mod webui;
+mod camera;
 
 fn main() {
-    println!("Hello, world, I am picrawler!");
+    println!("Hello world, I am picrawler!");
     device::reset_mcu();
     println!("Reset MCU done!");
 

@@ -17,6 +17,13 @@ fn main() {
     device::reset_mcu();
     println!("Reset MCU done!");
 
+    let cam_mgr = cam_mgr::new();
+    
+    for i in cam_mgr.list_cameras().iter() {
+        println!("cam {} \n ", i.id());
+        println!("{:?}", i.properties());
+    } 
+
     let args: Vec<String> = env::args().collect();
 
     let config_path = args.iter()

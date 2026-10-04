@@ -17,12 +17,23 @@ fn main() {
     device::reset_mcu();
     println!("Reset MCU done!");
 
-    let cam_mgr = cam_mgr::new();
-    
+    let mut cam_mgr = cam_mgr::new();
+
     for i in cam_mgr.list_cameras() {
         println!("cam {} \n ", i.display_name());
         println!("{:?}", i.properties());
-    } 
+    }
+
+    if let Some(cam) = cam_mgr.list_cameras().first() {
+        cam_mgr.set_main_cam(&cam.display_name());
+        match cam_mgr.start(640, 480, 30) {
+            Ok(()) => match cam_mgr.grab_frame(2000) {
+                Some(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
+                None => eprintln!("camera: no frame within 2s"),
+            },
+            Err(e) => eprintln!("camera: failed to start: {}", e),
+        }
+    }
 
     let args: Vec<String> = env::args().collect();
 

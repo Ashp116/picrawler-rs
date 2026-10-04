@@ -1,24 +1,27 @@
-use libcamera::{camera::Camera, camera_manager::{CameraList, CameraManager}, logging::{LoggingLevel::Error, LoggingTarget, log_set_target}};
+use gstreamer::{self as gst, Device, DeviceMonitor, prelude::*};
 
 pub struct cam_mgr {
-    lib_cam_mgr: CameraManager,
-    main_cam: Option<Camera<'static>>,
+    gst_dev_mon: DeviceMonitor,
+    main_cam: Option<Device>,
 }
 
 impl cam_mgr {
     pub fn new() -> Self {
-        let cam = CameraManager::new().unwrap();
-        log_set_target(LoggingTarget::None); // change this for debugging
-        cam.log_set_level("*", Error);
+        gst::init().unwrap();
+        gst::log::remove_default_log_function(); // comment this out for debugging
+
+        let monitor = DeviceMonitor::new();
+        monitor.add_filter(Some("Video/Source"), None);
+        monitor.start().unwrap();
 
         Self {
-            lib_cam_mgr: cam,
+            gst_dev_mon: monitor,
             main_cam: None,
         }
     }
 
-    pub fn get_camera(&self, id: &str) -> Option<Camera<'static>> {
-        self.lib_cam_mgr.get(id)
+    pub fn get_camera(&self, id: &str) -> Option<Device> {
+        self.list_cameras().into_iter().find(|cam| cam.display_name() == id)
     }
 
     pub fn set_main_cam(&mut self, id: &str) {
@@ -29,7 +32,13 @@ impl cam_mgr {
         }
     }
 
-    pub fn list_cameras(&self) -> CameraList {
-        self.lib_cam_mgr.cameras()
-    }  
+    pub fn list_cameras(&self) -> Vec<Device> {
+        self.gst_dev_mon.devices().into_iter().collect()
+    }
+}
+
+impl Drop for cam_mgr {
+    fn drop(&mut self) {
+        self.gst_dev_mon.stop();
+    }
 }

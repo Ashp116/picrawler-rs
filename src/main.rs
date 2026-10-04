@@ -19,8 +19,8 @@ fn main() {
 
     let cam_mgr = cam_mgr::new();
     
-    for i in cam_mgr.list_cameras().iter() {
-        println!("cam {} \n ", i.id());
+    for i in cam_mgr.list_cameras() {
+        println!("cam {} \n ", i.display_name());
         println!("{:?}", i.properties());
     } 
 

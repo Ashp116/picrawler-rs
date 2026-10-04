@@ -52,12 +52,28 @@ impl cam_mgr {
         self.gst_dev_mon.devices().into_iter().collect()
     }
 
-    // camera -> videoconvert -> videoscale -> appsink (RGB, width x height @ fps)
+    // on the pi the v4l2 provider also lists codec/isp nodes as video sources,
+    // so prefer a device backed by libcamerasrc and fall back to the first one
+    pub fn default_camera(&self) -> Option<Device> {
+        let cams = self.list_cameras();
+        cams.iter()
+            .find(|cam| {
+                cam.create_element(None)
+                    .ok()
+                    .and_then(|e| e.factory())
+                    .is_some_and(|f| f.name() == "libcamerasrc")
+            })
+            .or(cams.first())
+            .cloned()
+    }
+
+    // camera -> videorate -> videoconvert -> videoscale -> appsink (RGB, width x height @ fps)
     pub fn start(&mut self, width: i32, height: i32, fps: i32) -> Result<(), Box<dyn Error>> {
         self.stop();
 
         let cam = self.main_cam.as_ref().ok_or("no main camera set")?;
         let src = cam.create_element(Some("cam_src"))?;
+        let rate = gst::ElementFactory::make("videorate").build()?;
         let convert = gst::ElementFactory::make("videoconvert").build()?;
         let scale = gst::ElementFactory::make("videoscale").build()?;
 
@@ -76,12 +92,23 @@ impl cam_mgr {
             .build();
 
         let pipeline = gst::Pipeline::new();
-        pipeline.add_many([&src, &convert, &scale, sink.upcast_ref()])?;
-        gst::Element::link_many([&src, &convert, &scale, sink.upcast_ref()])?;
-        pipeline.set_state(gst::State::Playing)?;
+        pipeline.add_many([&src, &rate, &convert, &scale, sink.upcast_ref()])?;
+        gst::Element::link_many([&src, &rate, &convert, &scale, sink.upcast_ref()])?;
 
-        self.pipeline = Some(pipeline);
+        self.pipeline = Some(pipeline.clone());
         self.sink = Some(sink);
+
+        // wait for the camera to actually come up so negotiation errors surface here
+        let started = pipeline.set_state(gst::State::Playing).is_ok()
+            && pipeline.state(gst::ClockTime::from_seconds(5)).0.is_ok();
+        if let Some(err) = self.bus_error() {
+            self.stop();
+            return Err(err.into());
+        }
+        if !started {
+            self.stop();
+            return Err("pipeline failed to reach PLAYING".into());
+        }
         Ok(())
     }
 
@@ -92,23 +119,42 @@ impl cam_mgr {
         self.sink = None;
     }
 
-    // waits up to timeout_ms for the next frame; None if not running or timed out
-    pub fn grab_frame(&self, timeout_ms: u64) -> Option<Frame> {
-        let sample = self.sink.as_ref()?.try_pull_sample(gst::ClockTime::from_mseconds(timeout_ms))?;
-        let info = gst_video::VideoInfo::from_caps(sample.caps()?).ok()?;
-        let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(sample.buffer()?, &info).ok()?;
+    // pops the first pending error off the pipeline bus, if any
+    fn bus_error(&self) -> Option<String> {
+        let bus = self.pipeline.as_ref()?.bus()?;
+        let msg = bus.pop_filtered(&[gst::MessageType::Error])?;
+        let gst::MessageView::Error(err) = msg.view() else { return None };
+        Some(format!(
+            "{} (from {}): {}",
+            err.error(),
+            msg.src().map(|s| s.path_string().to_string()).unwrap_or_default(),
+            err.debug().unwrap_or_default()
+        ))
+    }
+
+    // waits up to timeout_ms for the next frame
+    pub fn grab_frame(&self, timeout_ms: u64) -> Result<Frame, String> {
+        let sink = self.sink.as_ref().ok_or("camera not started")?;
+        let Some(sample) = sink.try_pull_sample(gst::ClockTime::from_mseconds(timeout_ms)) else {
+            return Err(self.bus_error().unwrap_or_else(|| format!("no frame within {}ms", timeout_ms)));
+        };
+
+        let caps = sample.caps().ok_or("sample has no caps")?;
+        let buffer = sample.buffer().ok_or("sample has no buffer")?;
+        let info = gst_video::VideoInfo::from_caps(caps).map_err(|e| e.to_string())?;
+        let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, &info).map_err(|e| e.to_string())?;
 
         let (width, height) = (frame.width(), frame.height());
         let stride = frame.plane_stride()[0] as usize;
         let row_len = width as usize * 3;
-        let plane = frame.plane_data(0).ok()?;
+        let plane = frame.plane_data(0).map_err(|e| e.to_string())?;
 
         let mut data = Vec::with_capacity(row_len * height as usize);
         for row in plane.chunks(stride).take(height as usize) {
             data.extend_from_slice(&row[..row_len]);
         }
 
-        Some(Frame { width, height, data })
+        Ok(Frame { width, height, data })
     }
 }
 

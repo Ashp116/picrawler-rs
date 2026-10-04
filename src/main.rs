@@ -24,12 +24,13 @@ fn main() {
         println!("{:?}", i.properties());
     }
 
-    if let Some(cam) = cam_mgr.list_cameras().first() {
+    if let Some(cam) = cam_mgr.default_camera() {
+        println!("camera: using {}", cam.display_name());
         cam_mgr.set_main_cam(&cam.display_name());
         match cam_mgr.start(640, 480, 30) {
-            Ok(()) => match cam_mgr.grab_frame(2000) {
-                Some(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
-                None => eprintln!("camera: no frame within 2s"),
+            Ok(()) => match cam_mgr.grab_frame(10000) {
+                Ok(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
+                Err(e) => eprintln!("camera: {}", e),
             },
             Err(e) => eprintln!("camera: failed to start: {}", e),
         }

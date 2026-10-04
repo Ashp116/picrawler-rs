@@ -24,16 +24,19 @@ fn main() {
         println!("{:?}", i.properties());
     }
 
-    if let Some(cam) = cam_mgr.default_camera() {
-        println!("camera: using {}", cam.display_name());
-        cam_mgr.set_main_cam(&cam.display_name());
-        match cam_mgr.start(640, 480, 30) {
-            Ok(()) => match cam_mgr.grab_frame(10000) {
-                Ok(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
-                Err(e) => eprintln!("camera: {}", e),
-            },
-            Err(e) => eprintln!("camera: failed to start: {}", e),
+    match cam_mgr.default_camera() {
+        Some(cam) => {
+            println!("camera: using {}", cam.display_name());
+            cam_mgr.set_main_cam(&cam.display_name());
         }
+        None => println!("camera: no libcamera device listed, using libcamerasrc directly"),
+    }
+    match cam_mgr.start(640, 480, 30) {
+        Ok(()) => match cam_mgr.grab_frame(10000) {
+            Ok(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
+            Err(e) => eprintln!("camera: {}", e),
+        },
+        Err(e) => eprintln!("camera: failed to start: {}", e),
     }
 
     let args: Vec<String> = env::args().collect();

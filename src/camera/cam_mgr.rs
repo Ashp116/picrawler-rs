@@ -52,27 +52,29 @@ impl cam_mgr {
         self.gst_dev_mon.devices().into_iter().collect()
     }
 
-    // on the pi the v4l2 provider also lists codec/isp nodes as video sources,
-    // so prefer a device backed by libcamerasrc and fall back to the first one
+    // on the pi the v4l2 provider also lists raw csi/codec/isp nodes (rp1-cfe, unicam,
+    // bcm2835-*) as video sources; those can't stream on their own, only libcamera can
     pub fn default_camera(&self) -> Option<Device> {
-        let cams = self.list_cameras();
-        cams.iter()
-            .find(|cam| {
-                cam.create_element(None)
-                    .ok()
-                    .and_then(|e| e.factory())
-                    .is_some_and(|f| f.name() == "libcamerasrc")
-            })
-            .or(cams.first())
-            .cloned()
+        self.list_cameras().into_iter().find(|cam| {
+            cam.create_element(None)
+                .ok()
+                .and_then(|e| e.factory())
+                .is_some_and(|f| f.name() == "libcamerasrc")
+        })
     }
 
     // camera -> videorate -> videoconvert -> videoscale -> appsink (RGB, width x height @ fps)
     pub fn start(&mut self, width: i32, height: i32, fps: i32) -> Result<(), Box<dyn Error>> {
         self.stop();
 
-        let cam = self.main_cam.as_ref().ok_or("no main camera set")?;
-        let src = cam.create_element(Some("cam_src"))?;
+        // with no main camera set, let libcamerasrc pick the first sensor itself
+        let src = match &self.main_cam {
+            Some(cam) => cam.create_element(Some("cam_src"))?,
+            None => gst::ElementFactory::make("libcamerasrc")
+                .name("cam_src")
+                .build()
+                .map_err(|_| "libcamerasrc not found, install gstreamer1.0-libcamera")?,
+        };
         let rate = gst::ElementFactory::make("videorate").build()?;
         let convert = gst::ElementFactory::make("videoconvert").build()?;
         let scale = gst::ElementFactory::make("videoscale").build()?;

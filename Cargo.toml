@@ -12,3 +12,4 @@ tungstenite = "0.26"
 gstreamer = "0.25"
 gstreamer-app = "0.25"
 gstreamer-video = "0.25"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }

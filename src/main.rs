@@ -1,5 +1,7 @@
 use std::{env, thread, time::{Duration, Instant}};
 
+use gstreamer::prelude::DeviceExt;
+
 use crate::{camera::cam_mgr::cam_mgr, robot::Robot};
 
 mod device;
@@ -33,7 +35,10 @@ fn main() {
     }
     match cam_mgr.start(640, 480, 30) {
         Ok(()) => match cam_mgr.grab_frame(10000) {
-            Ok(f) => println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len()),
+            Ok(f) => {
+                let _ = f.save_frame("./test.jpg");
+                println!("camera: got {}x{} frame ({} bytes)", f.width, f.height, f.data.len())
+            },
             Err(e) => eprintln!("camera: {}", e),
         },
         Err(e) => eprintln!("camera: failed to start: {}", e),

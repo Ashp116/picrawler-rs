@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, path::Path};
 
 use gstreamer::{self as gst, Device, DeviceMonitor, prelude::*};
 use gstreamer_app::AppSink;
@@ -11,11 +11,20 @@ pub struct Frame {
     pub data: Vec<u8>,
 }
 
+impl Frame {
+    pub fn save_frame(&self, path: impl AsRef<Path>) -> Result<(), String> {
+        image::save_buffer(path, &self.data, self.width, self.height, image::ExtendedColorType::Rgb8)
+            .map_err(|e| e.to_string())
+    }
+}
+
 pub struct cam_mgr {
     gst_dev_mon: DeviceMonitor,
     main_cam: Option<Device>,
     pipeline: Option<gst::Pipeline>,
     sink: Option<AppSink>,
+    // libcamerasrc properties (exposure, gain, ...) applied each time the pipeline is built
+    src_props: Vec<(String, String)>,
 }
 
 impl cam_mgr {
@@ -32,6 +41,7 @@ impl cam_mgr {
             main_cam: None,
             pipeline: None,
             sink: None,
+            src_props: Vec::new(),
         }
     }
 
@@ -46,6 +56,13 @@ impl cam_mgr {
         } else {
             eprintln!("Invalid camera id: {} ", id);
         }
+    }
+
+    // sets a camera control on the libcamerasrc element, e.g. ("exposure-value", "1.5");
+    // takes effect on the next start
+    pub fn set_src_property(&mut self, name: &str, value: &str) {
+        self.src_props.retain(|(n, _)| n != name);
+        self.src_props.push((name.to_string(), value.to_string()));
     }
 
     pub fn list_cameras(&self) -> Vec<Device> {
@@ -75,6 +92,14 @@ impl cam_mgr {
                 .build()
                 .map_err(|_| "libcamerasrc not found, install gstreamer1.0-libcamera")?,
         };
+        // property names differ between libcamera versions, so skip unknown ones instead of panicking
+        for (name, value) in &self.src_props {
+            if src.find_property(name).is_some() {
+                src.set_property_from_str(name, value);
+            } else {
+                eprintln!("camera: libcamerasrc has no property '{}', ignoring", name);
+            }
+        }
         let rate = gst::ElementFactory::make("videorate").build()?;
         let convert = gst::ElementFactory::make("videoconvert").build()?;
         let scale = gst::ElementFactory::make("videoscale").build()?;
